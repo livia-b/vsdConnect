@@ -26,6 +26,7 @@ if PYTHON3:
     from pathlib import Path, PurePath, WindowsPath
 import requests
 
+
 requests.packages.urllib3.disable_warnings()
 
 
@@ -669,6 +670,34 @@ class VSDConnecter:
                 return res
         else:
             return target
+
+
+    def removeObjectFromFolder(self, target, obj):
+        '''
+        remove an object to the folder
+
+        :param target: (APIFolder) the target folder
+        :param obj: (APIObject) the object to remove
+        :returns: updated folder (APIFolder)
+        '''
+        objSelfUrl = dict([('selfUrl',obj.selfUrl,)])
+        objects = target.containedObjects
+        if not objects:
+            objects = []
+
+        if objects.count(objSelfUrl) == 0:
+            print('Object not present in folder')
+            return target
+        else:
+            objects.remove(objSelfUrl)
+            target.containedObjects = objects
+            res = self.putRequest('folders/', data = target.get())
+            if not isinstance(res, int):
+                target = APIFolder()
+                target.set(obj = res)
+                return target
+            else:
+                return res
 
 
 
