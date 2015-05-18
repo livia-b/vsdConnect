@@ -14,10 +14,10 @@ else:
 import os
 import urllib
 if PYTHON3:
-    import urllib.parse as urlparser
-    import urllib.parse.quote as urlparse_quote
+    from urllib.parse import urlparse
+    from urllib.parse import quote as urlparse_quote
 else:
-    from urlparse import urlparse as urlparser
+    from urlparse import urlparse
     from urllib import quote as urlparse_quote
 
 import json
@@ -82,7 +82,7 @@ class VSDConnecter:
         :param resource: (str) to the api resource
         :returns: (str) the full resource path 
         '''
-        res = urlparser(str(resource))
+        res = urlparse(str(resource))
 
         if res.scheme == 'https':
             return resource
@@ -335,7 +335,7 @@ class VSDConnecter:
         :returns: list of folder objects (json)
         '''
 
-        search = urllib.parse.quote(search)
+        search = urlparse_quote(search)
         if mode == 'exact':
             url = self.fullUrl(resource) + '?$filter=Term%20eq%20%27{0}%27'.format(search) 
         else:
