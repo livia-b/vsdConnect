@@ -15,16 +15,15 @@ import os
 import urllib
 if PYTHON3:
     from urllib.parse import urlparse
-    from urllib.parse import quote as urlparse_quote
+    from urllib.parse import quote
 else:
     from urlparse import urlparse
-    from urllib import quote as urlparse_quote
-
+    from urllib import quote
 import json
 import getpass
-if PYTHON3:
-    from pathlib import Path, PurePath, WindowsPath
+from pathlib import Path, PurePath, WindowsPath
 import requests
+import logging
 
 
 requests.packages.urllib3.disable_warnings()
@@ -153,10 +152,7 @@ class VSDConnecter:
         :raises: ValueError
         '''
         selfURL_path = urllib.parse.urlsplit(selfURL).path
-        if PYTHON3:
-            oID = Path(selfURL_path).name
-        else:
-            oID = os.path.basename(selfURL_path)
+        oID = Path(selfURL_path).name
 
         try: 
             r = int(oID)
@@ -335,7 +331,7 @@ class VSDConnecter:
         :returns: list of folder objects (json)
         '''
 
-        search = urlparse_quote(search)
+        search = quote(search)
         if mode == 'exact':
             url = self.fullUrl(resource) + '?$filter=Term%20eq%20%27{0}%27'.format(search) 
         else:
@@ -355,10 +351,13 @@ class VSDConnecter:
         :returns: file object (APIObject)
         '''
         try:
+            if isinstance(filename,str):
+                logging.warning('Converting string filename to path object')
+                filename = Path(filename)
             data = filename.open(mode = 'rb').read()
             files  = { 'file' : (str(filename.name), data)}
         except:
-            print ("opening file", filename, "failed, aborting")
+            logging.error("opening file %s failed, aborting" %filename, exc_info= True)
             return
 
         res = self.s.post(self.url + 'upload', files = files)  
@@ -433,7 +432,7 @@ class VSDConnecter:
         :param mode: (str) search for partial match ('default') or exact match ('exact')
         :returns: list of folder objects (APIFolders)
         '''   
-        search = urlparse_quote(search)
+        search = quote(search)
         if mode == 'exact':
             url = self.url + "folders?$filter=Name%20eq%20%27{0}%27".format(search) 
         else:
@@ -466,7 +465,7 @@ class VSDConnecter:
         :param mode: (str) find exact term (exact) or partial match (default)
         :returns: ontology term entries (json)
         '''
-        search = urlparse_quote(search)
+        search = quote(search)
         if mode == 'exact':
             url = self.url+"ontologies/{0}?$filter=Term%20eq%20%27{1}%27".format(oType,search) 
         else:
