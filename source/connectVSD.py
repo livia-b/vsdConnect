@@ -25,7 +25,6 @@ from pathlib import Path, PurePath, WindowsPath
 import requests
 import logging
 
-
 requests.packages.urllib3.disable_warnings()
 
 
@@ -361,9 +360,13 @@ class VSDConnecter:
             return
 
         res = self.s.post(self.url + 'upload', files = files)  
-        if res.status_code == requests.codes.created:
-            obj = self.getAPIObjectType(res)
-            obj.set(obj = res)
+        if res.status_code in [requests.codes.created, requests.codes.ok] :
+            result = res.json() # {file: {selfUrl: ...}, relatedObject: {selfUrl}}
+            res_file = {'selfUrl': result['file']['selfUrl']} # 'objects': [result['relatedObject']['selfUrl']] it's the second last in case of segmentations
+            if res.status_code == requests.codes.ok:
+                logging.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
+            obj = APIFile() #obj = self.getAPIObjectType(res_file)
+            obj.set(obj = res_file)
             return obj
         else: 
             return res.status_code
@@ -944,7 +947,8 @@ class APIFile(APIBasic):
         'originalFileName',
         'anonymizedFileHashCode',
         'size',
-        'fileHashCode'
+        'fileHashCode',
+        'objects'
         ])
 
     for i in APIBasic.oKeys:
