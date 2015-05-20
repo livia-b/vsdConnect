@@ -8,7 +8,8 @@ import logging
 import requests
 from pathlib import Path
 import glob
-
+import time
+import dicom  #pip install pydicom
 
 parser = argparse.ArgumentParser(description='Upload series of files to the SMIR to a specific folder')
 group = parser.add_mutually_exclusive_group()
@@ -22,7 +23,7 @@ parser.add_argument('--file', dest='filename', default=[], nargs = '*' ,required
                    help='filenames to upload. can be used with pathname expansion:  --file  myfolder/*.dcm' )
 parser.add_argument('--retry', dest='retry', default=3, nargs = '*' ,required=0, type = int,
                    help='Number of upload attempts in case of error' )
-parser.add_argument('--loglevel', default='INFO', help='Log level [CRITICAL, ERROR, WARNING, INFO, DEBUG] default is warning')
+parser.add_argument('--loglevel', default='WARNING', help='Log level [CRITICAL, ERROR, WARNING, INFO, DEBUG] default is warning')
 
 # parser.add_argument('--retryTimeout', dest= 'retryTimeout', default=1, required=0, type = int,
 #                    help='Timeout in seconds between successive upload attempts')
@@ -45,25 +46,27 @@ if args.noglob:
 else:
     for f in args.filename:
         filenames += [Path(i) for i in glob.glob(f)]
-
-print("Uploading %d files" %(len(filenames)))
+nfiles = float(len(filenames))
+print("Uploading %d files" %(nfiles))
 uploadedObjects= {}
 filesInError = []
-nfiles = float(len(filenames))
+
 for i,f in enumerate(filenames):
     res = None
     uploadAttempts = 0
-    if not res in [401] : #if not authorized access will be blocked
-        logging.info("%2.0f%% Uploading file %s [%s]" %(i/nfiles*100,f, uploadAttempts))
-        res = con.uploadFile(f)
-        uploadAttempts += 1
-        if isinstance(res,int):
-            logging.info(requests.status_codes._codes[res][0])
+    while(res is None or isinstance(res,int )) and uploadAttempts <= args.retry:
+        if not res in [401] : #if not authorized access will be blocked
+            logging.info("%2.0f%% Uploading file %s [%s]" %(i/nfiles*100,f, uploadAttempts))
+            res = con.uploadFile(f)
+            time.sleep(0.01)
+            uploadAttempts += 1
+            if isinstance(res,int):
+                logging.info(requests.status_codes._codes[res][0])
     try:
         fileUrl = res.selfUrl
         fileAPIObject = con.getFile(fileUrl)
         lastFileObject = fileAPIObject.objects[-1]['selfUrl']
-        uploadedObjects[lastFileObject] =  uploadedObjects.get(lastFileObject,[])  +[lastFileObject]
+        uploadedObjects[lastFileObject] =  uploadedObjects.get(lastFileObject,[])  +[(fileUrl,f )] #[(fileUrl,fileLcoalPath),(fileUrl,fileLocalPath)]
     except:
         filesInError.append(f)
         if isinstance(res, int):
@@ -73,12 +76,22 @@ for i,f in enumerate(filenames):
             logging.error('Upload of file %s not successful.' %f, exc_info = True)
 
 
-print("done , uploaded %d/%d files " %(len(filenames) - len(filesInError), len(filenames) ) )
 filesActuallyUploaded = 0
+#print("\tObject\t#files\tFileName\tPatient\t\tRows\t\Columns")
 for obj in uploadedObjects:
-    logging.info("%s \t: %d files" %(obj, len(uploadedObjects[obj])) )
+    firstFileUrl=uploadedObjects[obj][0][0]
+    firstFileLocalPath=uploadedObjects[obj][0][1]
+    datainfo = ' '
+    try:
+        img = dicom.read_file(firstFileLocalPath.as_posix())
+        for tag in ['PatientName','PatientID', 'Rows', 'Colums']:
+            datainfo += "%s\t" % (img.get(tag,default=' '))
+    except:
+        raise
+
+    print("%s \t: %d files \t%s\t%s" %(obj, len(uploadedObjects[obj]),firstFileLocalPath, datainfo ))
     filesActuallyUploaded +=1
-logging.info("Uploaded %d files in %d objects" %(len(filenames), filesActuallyUploaded) )
+print("Uploaded %d files in %d objects" %(len(filenames), filesActuallyUploaded) )
 
 folder = None
 if args.targetFolderName:
