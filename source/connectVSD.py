@@ -27,6 +27,16 @@ import logging
 
 requests.packages.urllib3.disable_warnings()
 
+def statusDescription(res):
+    """
+    Simple wrapping around status_codes dictionary
+
+    :param res: status code
+    :type res: int
+    :return: status description
+    :rtype: str
+    """
+    return requests.status_codes._codes[res][0]
 
 class VSDConnecter:
     APIURL='https://demo.virtualskeleton.ch/api/'
@@ -341,7 +351,7 @@ class VSDConnecter:
 
 
 
-    def uploadFile(self, filename):
+    def uploadFile(self, filename, ret_response = False):
         ''' 
         push (post) a file to the server
 
@@ -359,7 +369,9 @@ class VSDConnecter:
             logging.error("opening file %s failed, aborting" %filename, exc_info= True)
             return
 
-        res = self.s.post(self.url + 'upload', files = files)  
+        res = self.s.post(self.url + 'upload', files = files)
+        if ret_response:
+                return res
         if res.status_code in [requests.codes.created, requests.codes.ok] :
             result = res.json() # {file: {selfUrl: ...}, relatedObject: {selfUrl}}
             res_file = {'selfUrl': result['file']['selfUrl']} # 'objects': [result['relatedObject']['selfUrl']] it's the second last in case of segmentations
@@ -367,7 +379,6 @@ class VSDConnecter:
                 logging.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
             obj = APIFile() #obj = self.getAPIObjectType(res_file)
             obj.set(obj = res_file)
-            return obj
         else: 
             return res.status_code
 
@@ -669,6 +680,7 @@ class VSDConnecter:
                 target.set(obj = res)
                 return target
             else:
+                logging.warning(res)
                 return res
         else:
             return target
