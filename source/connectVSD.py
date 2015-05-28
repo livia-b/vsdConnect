@@ -36,7 +36,8 @@ def statusDescription(res):
     :return: status description
     :rtype: str
     """
-    return requests.status_codes._codes[res][0]
+    if isinstance(res,int):
+        return requests.status_codes._codes[res][0]
 
 class VSDConnecter:
     APIURL='https://demo.virtualskeleton.ch/api/'
@@ -379,6 +380,7 @@ class VSDConnecter:
                 logging.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
             obj = APIFile() #obj = self.getAPIObjectType(res_file)
             obj.set(obj = res_file)
+            return obj
         else: 
             return res.status_code
 

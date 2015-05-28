@@ -10,20 +10,25 @@ from pathlib import Path
 import glob
 import time
 import dicom  #pip install pydicom
-importlib.reload(connectVSD)
+#importlib.reload(connectVSD)
 
 def UploadFiles(filenames, con, retry):
     uploadedObjects= {}
     filesInError = []
     nfiles = len(filenames)
+    printinfo = range(0,nfiles, int(nfiles/100)+1)
     for i,f in enumerate(filenames):
         res = None
         uploadAttempts = 0
         while(res is None or isinstance(res,int )) and uploadAttempts <= retry :
             if not res in [401] : #if not authorized access will be blocked
-                logging.info("%2.0f%% Uploading file %s [%s]" %(i/nfiles*100,f, uploadAttempts))
+                infostr = "%2.0f%% Uploading file %s [%s]" %(i/nfiles*100,f, uploadAttempts)
+                if uploadAttempts>0 or i %10 ==0:
+                    logging.info(infostr)
+                else:
+                    logging.debug(infostr)
                 res = con.uploadFile(f)
-                time.sleep(0.01)
+                time.sleep(1)
                 uploadAttempts += 1
                 if isinstance(res,int):
                     logging.info(requests.status_codes._codes[res][0])
@@ -120,30 +125,45 @@ def main():
 
 def ResumeUploading(con, folderList, pattern = '*.DCM' ):
     #todo: merge with check missing slices
-    importlib.reload(connectVSD)
+    #importlib.reload(connectVSD)
     for folder in folderList:
         logging.info(folder)
         dicomfiles =[f for f in  Path(folder).glob(pattern)]
         #dicomfiles = glob.glob(folder+pattern)
         nfiles = len(dicomfiles)
         upload1 =  con.uploadFile(dicomfiles[0])
+        logging.debug(upload1)
+        if isinstance(upload1,int):
+            logging.error(connectVSD.statusDescription(upload1))
         fileAPIObject = con.getFile(upload1.selfUrl)
+        print(connectVSD.statusDescription(fileAPIObject))
         id = fileAPIObject.objects[-1]['selfUrl']
         id_info = con.getObject(id) #info on the object to which the file belongs
-        print('File %s uploaded to object %s [%d / %d files]' %(upload1.selfUrl, id, len(id_info.files), nfiles))
+
         nfiles_uploaded = len(id_info.files)
+        datainfo = ""
+        try:
+            img = dicom.read_file(dicomfiles[0].as_posix())
+            for tag in ['PatientName','PatientID', 'Rows', 'Colums']:
+                datainfo += "%s\t" % (img.get(tag,default=' '))
+        except:
+            pass
+        print('File %s uploaded to object %s [%d / %d files] \t %s' %(upload1.selfUrl, Path(id).name, len(id_info.files), nfiles, datainfo))
         #suppose that the files were uplaoded in the same order
         uploadedObjects, filesInError = UploadFiles([Path(i) for i in dicomfiles[nfiles_uploaded:]], con, 3)
         id_info2 = con.getObject(id)
         if not(len(id_info2.files) == nfiles):
             logging.error("Uploaded %d files of %d "  %(len(id_info2.files) ,nfiles) )
 
-        folder = con.getFolderByName('HEAREU')[0]
+        folders = con.getFolderByName('HEAREU')
+        logging.debug(folders)
+        folder = folders[0]
+
         for obj in uploadedObjects:
             print("Copying object %s to target folder %s " %(obj, folder.name))
             objID= con.getObject(obj)
             res = con.addObjectToFolder(folder, objID)
-            logging.info()
+            logging.info(res)
 
 
 
