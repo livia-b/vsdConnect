@@ -4,17 +4,20 @@ import sys
 import getpass
 import requests
 import time
-
+logging.basicConfig(level='INFO')
 def main():
-
-    c = connectVSD.VSDConnecter()
-    object_ids = [121, 73960]
+    login_args = dict(
+            url='https://virtualskeleton.ch/api/',
+            username="livia.barazzetti@istb.unibe.ch",
+            password="Vb.l911842")
+    c = connectVSD.VSDConnecter(**login_args)
+    object_ids = [74246]
     for id in object_ids:
         try:
             originalFilenames = GetOriginalFilenames(id,c)
             print('id %d has %d files' %(id, len(originalFilenames)))
             if originalFilenames:
-                print(id, GetMissingFiles(originalFilenames) )
+                print(id, GetMissingFiles(originalFilenames, firstSlice=499))
         except:
             logging.error('exception for id %s' %id, exc_info=True)
 
@@ -55,17 +58,19 @@ def GetMissingFiles(originalFileNames, filenametemplate=None, firstSlice=0, nFil
             else:
                 raise Exception('Filename extension not recognized %s' %firstfile)
             prefix = firstfileBase[:-ndigits]
-            filenametemplate = prefix + "%0{}d".format(ndigits) + suffix # "slice%05d.dcm"
+            filenametemplate = prefix + "%0{}d".format(ndigits) + firstfile[-len(suffix):] # "slice%05d.dcm"  #I can't use the suffix, i neeed the correct case
             logging.info(filenametemplate)
 
     missingFiles = []
     i = firstSlice
-    while len(originalFileNames)>0 or (i-firstSlice < nFiles)  :
-        try:
-            curFile = filenametemplate %i
-            #print("Checking slice %d / %d" % (i-firstSlice, nFiles))
-            originalFileNames.remove(curFile)
-        except:
+    foundFiles = 0
+    while foundFiles < len(originalFileNames) or ((i-firstSlice) < nFiles)  :
+        curFile = filenametemplate %i
+        logging.info("Checking slice %d / %d [fileas already found %d/%d]" % (i-firstSlice, nFiles, foundFiles, len(originalFileNames)  ))
+        #originalFileNames.remove(curFile)
+        if curFile in originalFileNames:
+            foundFiles += 1
+        else:
             missingFiles.append(curFile)
         i += 1
     logging.debug(missingFiles)
