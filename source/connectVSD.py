@@ -122,6 +122,7 @@ class VSDConnecter:
         self.s.verify = False
 
         if authtype == 'basic':
+            logging.debug("authtype basic")
             self.username = username
             self.password = password
             self.s.auth = (self.username, self.password)
@@ -181,11 +182,13 @@ class VSDConnecter:
       
         params = dict([('rpp', rpp),('page', page),('include', include)])
 
-        try: 
+        try:
+            logging.debug("get(%s, params = %s)" %(self.fullUrl(resource), params))
             res = self.s.get(self.fullUrl(resource), params = params)
             if res.status_code == requests.codes.ok:
                 return res.json()
-            else: 
+            else:
+                logging.warning("getRequest %s failed: %s [%s]" %(resource, res, statusDescription(res.status_code) ))
                 return None
         except requests.exceptions.RequestException as err:
             print('request failed:', err)
@@ -251,6 +254,7 @@ class VSDConnecter:
             resource = 'objects/' + str(resource)
 
         res = self.getRequest(resource)
+        logging.debug("getObject %s : %s" %(resource, res))
         if res:
             obj = self.getAPIObjectType(res)
             obj.set(obj = res)
@@ -338,6 +342,7 @@ class VSDConnecter:
         :returns: the resource object (json)
         '''
         req = self.s.post(self.fullUrl(resource))
+        logging.debug(req)
         return req.json()
 
     def putRequestSimple(self, resource):
@@ -485,24 +490,35 @@ class VSDConnecter:
         maxchunksize = 1024 * 1024 * 100
         if chunksize < maxchunksize:
             for chunk in self.chunkedread(fp, chunksize):
+                attemptsLeft = 3
                 part = part + 1
                 print('uploading part {0} of {1}'.format(part,parts))
                 files  = { 'file' : (str(fp.name), chunk)}
-                res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files = files)
-                if res.status_code == requests.codes.ok:
-                    print('uploaded part {0} of {1}'.format(part,parts))
-                else:
-                    err = True
-        
+                while attemptsLeft >0:
+                    attemptsLeft += -1
+                    res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files = files)
+                    if res.status_code == requests.codes.ok:
+                        print('uploaded part {0} of {1}'.format(part,parts))
+                        attemptsLeft = 0
+                    else:
+                        err = True
+                        logging.warning("Error uploading file chunks: %s [attempts left %d]" %(statusDescription(res.status_code), attemptsLeft))
             if not err:
+                res = None
                 resource = 'chunked_upload/commit?filename={0}'.format(fp.name)
-                res = self.postRequestSimple(resource)
-                relObj = res['relatedObject']
-                obj = self.getObject(relObj['selfUrl'])
-              
-                return obj
+                attemptsLeft = 3
+                logging.info("Committing Upload")
+                while res is None and attemptsLeft > 0:
+                    attemptsLeft += -1
+                    res = self.postRequestSimple(resource)
+                    logging.debug("result of chunked_upload commit: %s", res)
+                    if res is None:
+                        logging.warning("error in chunked upload commit")
+                    relObj = res['relatedObject']
+                    obj = self.getObject(relObj['selfUrl'])
+                    return obj
             else:
-                return None
+                return res
         else:
             print('no uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, method))
             return None

@@ -76,5 +76,12 @@ def GetMissingFiles(originalFileNames, filenametemplate=None, firstSlice=0, nFil
     logging.debug(missingFiles)
     return missingFiles
 
-if __name__ == "__main__":
-    main()
+def printFirstOriginalFilename(con):
+    unpublished = con.getRequest('objects/unpublished')
+    for item in unpublished['items']:
+        for f in item['files'][:1]:
+            iff = con.getRequest(f['selfUrl'])
+            print('%s\t:%s' %(item['selfUrl'],iff['originalFileName']))
+
+#if __name__ == "__main__":
+    #main()
