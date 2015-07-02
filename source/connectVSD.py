@@ -31,6 +31,9 @@ from requests.auth import AuthBase
 import io
 import base64
 import zlib
+import zipfile
+import shutil
+
 try:
     import lxml.etree as ET
 except:
@@ -193,7 +196,23 @@ class VSDConnecter:
         except requests.exceptions.RequestException as err:
             print('request failed:', err)
             return None
-    
+
+    def downloadZip(self, resource, fp):
+        '''
+        download the zipfile into the given file (fp)
+
+        :param resource: (str) download URL
+        :param fp: (Path) filepath 
+        :returns: None or status_code ok (200)
+        '''
+        res = self.s.get(self.fullUrl(resource), stream = True)
+        if res.ok:
+            with fp.open('wb') as f:
+                shutil.copyfileobj(res.raw, f) 
+            return res.status_code
+        else:
+            return None
+
 
     def removeLinks(self, resource):
         '''removes all related item from an object '''
