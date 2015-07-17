@@ -197,6 +197,27 @@ class VSDConnecter:
         else:
             return None
 
+    def downloadObject(self, obj, wp = None):
+        '''
+        download the object into a ZIP file based on the object name and the working directory
+
+        :param obj: object (APIObject)
+        :param wp: (Path) workpath, where to store the zip 
+        :returns: None or status_code ok (200)
+        '''
+        
+        fp = Path(obj.name).with_suffix('.zip')
+        if wp:
+            fp = Path(wp, fn)
+
+        res = self.s.get(self.fullUrl(obj.downloadUrl), stream = True)
+        if res.ok:
+            with fp.open('wb') as f:
+                shutil.copyfileobj(res.raw, f) 
+            return res.status_code
+        else:
+            return None
+
 
     def removeLinks(self, resource):
         '''removes all related item from an object '''
@@ -542,7 +563,7 @@ class VSDConnecter:
                 filelist.append(res)
         return filelist
 
-    def fileObjectVersion(self,data):
+    def fileObjectVersion(self, data):
         ''' 
         Extract VSDID and selfUrl of the related Object Version of the file after file upload
 
@@ -652,16 +673,69 @@ class VSDConnecter:
         return license
 
     def getObjectRightList(self):
-        ''' retrieve a list of the available base object rights (APIObjectRights) '''
+        ''' retrieve a list of the available base object rights (APIPermission) '''
         res = self.getRequest('object_rights')
         permission = list()
         if res:
             for item in iter(res['items']):
                 perm = APIPermission()
                 perm.set(obj = item)
-                permission.append(lic)
+                permission.append(perm)
         
         return permission
+
+    def getObjectRight(self, pid):
+        ''' retrieve a  object rights object (APIPermission) 
+        
+        :param pid: permission id (int) or selfurl
+        :return: perm (APIPermission) object
+        '''
+
+        if isinstance(pid, int):
+            res = self.getRequest('object_rights/{0}'.format(pid))
+            if res:
+                perm = APIPermission()
+                perm.set(obj = res)
+            return perm
+        else:
+            return None
+
+    def getGroups(self, resource = 'groups',  rpp = None, page = None):
+        '''get the list of groups
+
+        :param resource: (str) resource path (eg nextPageUrl) or default groups
+        :param rpp: (int) results per page
+        :param page: (int) page to display
+        :returns: list of group objects (APIGroup)
+        :returns: pagination object(APIPagination)
+        '''
+
+        groups = list()
+        res = self.getRequest(resource, rpp, page)
+        ppObj = APIPagination()
+        ppObj.set(obj = res)
+
+        for g in ppObj.items:
+            group = APIGroup()
+            group.set(obj = g)
+            groups.append(group)
+        return groups, ppObj
+
+
+    def getGroup(self, gid):
+        ''' retrieve a group object (APIGroup)
+
+        :param gip: group id (int)
+        :return: group (APIGroup) object
+        '''
+        if isinstance(gid, int):
+            res = self.getRequest('groups/{0}'.format(gid))
+            if res:
+                group = APIGroup()
+                group.set(obj = res)
+            return group
+        else:
+            return None
 
     def getModalityList(self):
         ''' retrieve a list of modalities objects (APIModality)'''
@@ -1210,6 +1284,28 @@ class APIObjectUserRight(APIBasic):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIObjectUserRight, self).get()
+
+class APIGroup(APIBasic):
+    '''
+    API class for object user rights
+    '''
+    oKeys = list([
+        'Chief',
+        'name'
+        ])
+
+    for i in APIBasic.oKeys:
+        oKeys.append(i)
+
+    def __init__(self):
+        super(APIGroup, self).__init__(self.oKeys) 
+
+    def set(self, obj = None):
+        super(APIGroup, self).set(obj = obj)
+
+    def get(self):
+        '''transforms the class object into a json readable dict'''
+        return super(APIGroup, self).get()
 
 class APIPagination(object):
     '''
