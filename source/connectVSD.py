@@ -1165,6 +1165,52 @@ class APIModality(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIModality, self).get()
 
+class APIObjectGroupRight(APIBasic):
+    '''
+    API class for object group rights
+    '''
+    oKeys = list([
+        'relatedObject',
+        'relatedRights',
+        'relatedGroup'
+        ])
+
+    for i in APIBasic.oKeys:
+        oKeys.append(i)
+
+    def __init__(self):
+        super(APIObjectGroupRight, self).__init__(self.oKeys) 
+
+    def set(self, obj = None):
+        super(APIObjectGroupRight, self).set(obj = obj)
+
+    def get(self):
+        '''transforms the class object into a json readable dict'''
+        return super(APIObjectGroupRight, self).get()
+
+class APIObjectUserRight(APIBasic):
+    '''
+    API class for object user rights
+    '''
+    oKeys = list([
+        'relatedObject',
+        'relatedRights',
+        'relatedUser'
+        ])
+
+    for i in APIBasic.oKeys:
+        oKeys.append(i)
+
+    def __init__(self):
+        super(APIObjectUserRight, self).__init__(self.oKeys) 
+
+    def set(self, obj = None):
+        super(APIObjectUserRight, self).set(obj = obj)
+
+    def get(self):
+        '''transforms the class object into a json readable dict'''
+        return super(APIObjectUserRight, self).get()
+
 class APIPagination(object):
     '''
     API class for Pagination results
