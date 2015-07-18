@@ -673,28 +673,28 @@ class VSDConnecter:
         return license
 
     def getObjectRightList(self):
-        ''' retrieve a list of the available base object rights (APIPermission) '''
+        ''' retrieve a list of the available base object rights (APIObjecRight) '''
         res = self.getRequest('object_rights')
         permission = list()
         if res:
             for item in iter(res['items']):
-                perm = APIPermission()
+                perm = APIObjectRight()
                 perm.set(obj = item)
                 permission.append(perm)
         
         return permission
 
     def getObjectRight(self, pid):
-        ''' retrieve a  object rights object (APIPermission) 
+        ''' retrieve a  object rights object (APIObjecRight) 
         
         :param pid: permission id (int) or selfurl
-        :return: perm (APIPermission) object
+        :return: perm (APIObjecRight) object
         '''
 
         if isinstance(pid, int):
             res = self.getRequest('object_rights/{0}'.format(pid))
             if res:
-                perm = APIPermission()
+                perm = APIObjecRight()
                 perm.set(obj = res)
             return perm
         else:
@@ -736,6 +736,82 @@ class VSDConnecter:
             return group
         else:
             return None
+
+
+    def getUser(self, uid):
+        ''' retrieve a user object (APIUser)
+
+        :param uip: user id (int)
+        :return: user (APIUser) object
+        '''
+        if isinstance(gid, int):
+            res = self.getRequest('users/{0}'.format(gid))
+            if res:
+                user = APIUser()
+                user.set(obj = res)
+            return user
+        else:
+            return None
+
+    def getPermissionSets(self, permset = 'default'):
+        '''
+        :param permset: (str) name of the permission set: available are private, protect, default, collaborate
+        :return perms: list of object rights objects (APIObjectRight) 
+        '''
+
+        if permset == 'private':
+            lperms = list([1])
+        elif permset == 'protect':
+            lperms = list([2,3])
+        elif permset == 'default':
+            lperms = list([2,3,4])
+        elif permset == 'collaborate': 
+            lperms = list([2,3,4,5])
+
+        perms = list()
+        for pid in lperms:
+            perms.append(self.getObjectRight(pid))
+
+        return perms
+
+
+    def postObjectRights(self, obj, group, perms, isuser = False):
+        ''' translate a set of permissions and a group into the appropriate format and add it to the object
+
+        :param obj: (API Object) the object you want to add the permissions to 
+        :param group: (int) group id or user id
+        :param perms: (list) list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
+        :param isuser: (bool) set True if the groups variable is a user. Default is False 
+
+        :return objRight: a group or user rights (APIObjectGroupRight/APIObjectUserRight) object
+        '''
+
+        
+
+        #creat the dict of rights
+        rights = list()
+        for perm in perms:
+            rights.append(dict([('selfUrl', perm.selfUrl)]))
+
+
+        if isuser:
+            objRight = APIObjectUserRight()
+            objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
+            objRight.relatedRights = rights
+            objRight.relatedUser = dict([('selfUrl', group.selfUrl)])
+            #res = self.postRequest('object-usr-rights', data = objRight.get())
+            #print(res)
+
+        else:
+            objRight = APIObjectGroupRight()
+            objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
+            objRight.relatedRights = rights
+            objRight.relatedGroup = dict([('selfUrl', group.selfUrl)])
+            #res = self.postRequest('object-group-rights', data = objRight.get())
+            #print(res)
+        return objRight
+
+
 
     def getModalityList(self):
         ''' retrieve a list of modalities objects (APIModality)'''
@@ -1287,7 +1363,7 @@ class APIObjectUserRight(APIBasic):
 
 class APIGroup(APIBasic):
     '''
-    API class for object user rights
+    API class for groups
     '''
     oKeys = list([
         'Chief',
@@ -1306,6 +1382,27 @@ class APIGroup(APIBasic):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIGroup, self).get()
+
+class APIUser(APIBasic):
+    '''
+    API class for users
+    '''
+    oKeys = list([
+        'username'
+        ])
+
+    for i in APIBasic.oKeys:
+        oKeys.append(i)
+
+    def __init__(self):
+        super(APIUser, self).__init__(self.oKeys) 
+
+    def set(self, obj = None):
+        super(APIUser, self).set(obj = obj)
+
+    def get(self):
+        '''transforms the class object into a json readable dict'''
+        return super(APIUser, self).get()
 
 class APIPagination(object):
     '''
