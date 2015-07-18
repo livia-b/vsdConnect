@@ -294,7 +294,9 @@ class VSDConnecter:
         :param obj: (APIObject) an API Object
         :returns: (APIObject) the updated object
         '''
+
         res = self.putRequest(obj.selfUrl, data = obj.get())
+        
         if res:
             obj = self.getAPIObjectType(res)
             obj.set(obj = res)
@@ -312,6 +314,7 @@ class VSDConnecter:
             resource = 'folders/' + str(resource)
 
         res = self.getRequest(resource)
+
         if res:
             folder = APIFolder()
             folder.set(obj = res)
@@ -428,7 +431,7 @@ class VSDConnecter:
 
 
         except requests.exceptions.RequestException as err:
-            print('del request failed:',err)
+            print('publish request failed:',err)
             req = None
         
 
@@ -537,7 +540,7 @@ class VSDConnecter:
         :returns: api file object (APIFile) or status code
         '''  
         if isinstance(resource, int):
-            resource = 'files/' + str(resource)
+            resource = 'files/{0}'.format(resource)
 
         res = self.getRequest(resource)
 
@@ -664,18 +667,40 @@ class VSDConnecter:
     def getLicenseList(self):
         ''' retrieve a list of the available licenses (APILicense)'''
         res = self.getRequest('licenses')
-        license = list()
+        licenses = list()
         if res:
             for item in iter(res['items']):
                 lic = APILicense()
                 lic.set(obj = item)
-                license.append(lic)
-        return license
+                licenses.append(lic)
+        return licenses
+
+
+    def getLicense(self, resource):
+        ''' retrieve a license (APILicense)
+
+        :param resource: (int or str) resource path to the of the license
+        :return license: (APILicense) the license object
+        '''
+        
+        if isinstance(resource, int):
+            resource = 'licenses/{0}'.format(resource)
+        
+        res = self.getRequest(resource)
+        if res:
+            license = APILicense()
+            license.set(obj = res)
+        
+            return license
+        else:
+            return None
 
     def getObjectRightList(self):
         ''' retrieve a list of the available base object rights (APIObjecRight) '''
+        
         res = self.getRequest('object_rights')
         permission = list()
+        
         if res:
             for item in iter(res['items']):
                 perm = APIObjectRight()
@@ -684,18 +709,20 @@ class VSDConnecter:
         
         return permission
 
-    def getObjectRight(self, pid):
+    def getObjectRight(self, resource):
         ''' retrieve a  object rights object (APIObjecRight) 
         
-        :param pid: permission id (int) or selfurl
+        :param resource: resource to the permission id (int) or selfurl (str)
         :return: perm (APIObjecRight) object
         '''
 
-        if isinstance(pid, int):
-            res = self.getRequest('object_rights/{0}'.format(pid))
-            if res:
-                perm = APIObjecRight()
-                perm.set(obj = res)
+        if isinstance(resource, int):
+            resource = 'object_rights/{0}'.format(resource)
+        res = self.getRequest(resource)
+
+        if res:
+            perm = APIObjecRight()
+            perm.set(obj = res)
             return perm
         else:
             return None
@@ -722,33 +749,39 @@ class VSDConnecter:
         return groups, ppObj
 
 
-    def getGroup(self, gid):
+    def getGroup(self, resource):
         ''' retrieve a group object (APIGroup)
 
-        :param gip: group id (int)
+        :param resource: path to the group id (int) or selfUrl (str)
         :return: group (APIGroup) object
         '''
-        if isinstance(gid, int):
-            res = self.getRequest('groups/{0}'.format(gid))
-            if res:
-                group = APIGroup()
-                group.set(obj = res)
+        if isinstance(resource, int):
+            resource = 'groups/{0}'.format(resource)
+        
+        res = self.getRequest(resource)
+        
+        if res:
+            group = APIGroup()
+            group.set(obj = res)
             return group
         else:
             return None
 
 
-    def getUser(self, uid):
+    def getUser(self, resource):
         ''' retrieve a user object (APIUser)
 
-        :param uip: user id (int)
+        :param resource: path to the user resource id (int) or selfUrl (str)
         :return: user (APIUser) object
         '''
-        if isinstance(gid, int):
-            res = self.getRequest('users/{0}'.format(gid))
-            if res:
-                user = APIUser()
-                user.set(obj = res)
+        if isinstance(resource, int):
+            resource = 'users/{0}'.format(resource)
+
+        res = self.getRequest(resource)
+        
+        if res:
+            user = APIUser()
+            user.set(obj = res)
             return user
         else:
             return None
@@ -784,9 +817,7 @@ class VSDConnecter:
         :param isuser: (bool) set True if the groups variable is a user. Default is False 
 
         :return objRight: a group or user rights (APIObjectGroupRight/APIObjectUserRight) object
-        '''
-
-        
+        ''' 
 
         #creat the dict of rights
         rights = list()
@@ -875,9 +906,6 @@ class VSDConnecter:
         link.object2 = dict([('selfUrl', obj2.selfUrl)])
         
         return  self.postRequest('object-links', data = link.get())
-
-
-
 
 
     
