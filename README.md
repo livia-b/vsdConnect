@@ -5,7 +5,14 @@ This library implements a client for the REST API of the virtualskeletondatabase
 ## What is different in this Fork
 - Pyhton 3 (3.4.3)
 - usage of **requests** package instead of urllib2
+
+    pip install requests
+
 - usage of **pathlib** instead of os.path
+- usage of **PyJWT** for jwt.io authentication [PyJWT](https://github.com/jpadilla/pyjwt)
+
+    pip install PyJWT
+
 - support file poster.py removed (no needed with requests)
 - introduction of API classes
 - Added SAML auth 
