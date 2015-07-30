@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# connectVSD 0.1
+# connectVSD 0.2
 # (c) Tobias Gass, 2015
 # conncetVSD 0.2 python 3 @Michael Kistler 2015
 # changed / added auth 
@@ -8,6 +8,10 @@ from __future__ import print_function
 
 import sys
 import math
+
+from datetime import datetime 
+from calendar import timegm
+
 if sys.version_info >= (3, 0):
     PYTHON3 = True
 else:
@@ -15,6 +19,7 @@ else:
 
 import os
 import urllib
+import jwt
 if PYTHON3:
     from urllib.parse import urlparse
     from urllib.parse import quote as urlparse_quote
@@ -90,11 +95,24 @@ def samltoken(fp, stsurl = 'https://ciam-dev-chic.custodix.com/sts/services/STS'
     else:
         return None
 
+class JWTAuth(AuthBase):
+    """Attaches JMT to the given Request object. extends the request package auth class"""
+    def __init__(self, enctoken):
+        self.enctoken = enctoken
+
+    def __call__(self, r):
+        # modify and return the request
+        r.headers['Authorization'] = 'Bearer ' + self.enctoken
+        return r
+
+               
+
 class VSDConnecter:
     APIURL='https://demo.virtualskeleton.ch/api/'
 
-    def __init__(self, 
-        authtype = 'basic',
+    def __init__(
+        self, 
+        authtype = 'jwt',
         url = "https://demo.virtualskeleton.ch/api/",
         username = "demo@virtualskeleton.ch", 
         password = "demo", 
@@ -102,14 +120,17 @@ class VSDConnecter:
         token = None,
         ):
 
-        if version:
-            version = str(version) + '/'
-
+        self.version = version
         self.url = url + version
-
         self.s = requests.Session()
-        
         self.s.verify = False
+        self.authtype = authtype
+
+
+        if version:
+            self.version = str(version) + '/'
+
+
 
         if authtype == 'basic':
             self.username = username
@@ -120,7 +141,87 @@ class VSDConnecter:
             self.token = token
             self.s.auth = SAMLAuth(self.token)
 
+        elif authtype == 'jwt':
+            self.username = username
+            self.password = password
+            token = self.getJWTtoken()
+            self.token = token.tokenValue
+            self.token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXAiOiJKV1QiLCJleHAiOiIxNDM4MjY5Mzk0IiwibmJmIjoiMTQzODI2NTc5NCIsImlhdCI6IjE0MzgyNjU3OTQiLCJpc3MiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJhdWQiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJwcm4iOiIzIn0.HD-Q93zR-3yJKoq4R7gkWGswDwg2PfMXj18jWsiZ6ms'
+            self.s.auth = JWTAuth(self.token)
+            self._validate_exp()
+           
 
+    
+    def httpResponseCheck(self, response):
+        '''
+        check the response of a request call to the resouce. 
+        '''
+        
+        try:
+            response.raise_for_status()
+            print(response.status_code)
+            return True, response.status_code
+
+        except requests.exceptions.HTTPError as e:
+            print("And you get an HTTPError: {0}".format(e))
+            return False, response.status_code
+
+    def _validate_exp(self):
+        '''
+        checks if the session is still valid
+        '''
+        now = timegm(datetime.utcnow().utctimetuple()) 
+
+        if self.authtype == 'jwt':
+            payload = jwt.decode(self.token, verify = False)
+            try:
+                exp = int(payload['exp'])
+            except ValueError:
+                raise jwt.DecodeError('Expiration Time claim (exp) must be an'
+                                  ' integer.')
+
+            if exp < now :
+                #raise jwt.ExpiredSignatureError('Signature has expired')
+                return False
+            else:
+                self.s.auth = JWTAuth(self.token)
+                return True
+
+    def _stayAlive(self):
+        '''
+        checks if the token has expired, if yes, request a new token and initiates a new session
+
+        '''
+        if not self._validate_exp():
+            self.s.auth = JWTAuth(self.getJWTtoken().tokenValue)
+
+ 
+    def getJWTtoken(self):
+        '''
+        request the JWT token from the server using Basic Auth
+
+        :returns token: a authentication token (APIToken) or None
+        '''
+
+        token = False
+        res = requests.get(self.url + 'tokens/jwt', auth = (self.username, self.password), verify = False)
+
+        if self.httpResponseCheck(res)[0]:
+            
+            token = APIToken()
+            token.set(obj = res.json())
+            print('tokenset for apitoken: ',token.tokenValue)
+            try:
+                payload = jwt.decode(token.tokenValue, verify = False)
+                #tok = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXAiOiJKV1QiLCJleHAiOiIxNDM4MjY5Mzk0IiwibmJmIjoiMTQzODI2NTc5NCIsImlhdCI6IjE0MzgyNjU3OTQiLCJpc3MiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJhdWQiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJwcm4iOiIzIn0.HD-Q93zR-3yJKoq4R7gkWGswDwg2PfMXj18jWsiZ6ms'
+                #payload = jwt.decode(tok)
+
+                print('payload:', payload)
+
+            except jwt.InvalidTokenError as e:
+                print('token invalid, try using Basic Auth{0}'.format(e))
+
+        return token
 
     def getAPIObjectType(self, response):
         '''create an APIObject depending on the type 
@@ -143,6 +244,8 @@ class VSDConnecter:
         else:
             obj = APIObject()
         return obj
+
+
 
     def fullUrl(self, resource):
         '''
@@ -171,12 +274,15 @@ class VSDConnecter:
       
         params = dict([('rpp', rpp),('page', page),('include', include)])
 
+        self._stayAlive()
+
         try: 
             res = self.s.get(self.fullUrl(resource), params = params)
-            if res.status_code == requests.codes.ok:
-                return res.json()
-            else: 
-                return None
+            if self.httpResponseCheck(res):
+                if res.status_code == requests.codes.ok:
+                    return res.json()
+                else: 
+                    return None
         except requests.exceptions.RequestException as err:
             print('request failed:', err)
             return None
@@ -229,7 +335,7 @@ class VSDConnecter:
         else:
             print('nothing to delete, no links available')
 
-    def getAllPaginated(self, resource, itemlist):
+    def getAllPaginated(self, resource, itemlist = list()):
         '''
         returns all items as list 
 
@@ -611,7 +717,15 @@ class VSDConnecter:
                 f = APIFolder()
                 f.set(item)
                 result.append(f)
-            return result
+
+
+            if len(result) == 1:
+                folder = result[0]
+                print('1 folder matching the search found')
+                return folder
+            else:
+                print('list of {} folders matching the search found'.format(len(results)))
+                return result
         else:
             return res.status_code
 
@@ -620,6 +734,30 @@ class VSDConnecter:
         req = self.s.get(self.url+"folders/"+str(ID))
         return req.json()
        
+
+    def getContainedFolders(self, folder):
+        '''
+        return a list of folder object contained in a folder
+
+        :param folder: folder (APIFolder) object
+        :return folderlis: a list of folder object contained in the folder
+        '''
+
+        folderlist = list()
+        if folder.childFolders:
+
+            for fold in folder.childFolders:
+
+                f = self.getFolder(fold['selfUrl'])
+                folderlist.append(f.selfUrl)
+                print(f.selfUrl)
+
+            return folderlist
+        else:
+            print('the folder does not have any contained folders')
+            return None
+
+
 
     def searchOntologyTerm(self, search, oType = '0', mode = 'default'):
         '''
@@ -824,22 +962,21 @@ class VSDConnecter:
         for perm in perms:
             rights.append(dict([('selfUrl', perm.selfUrl)]))
 
-
         if isuser:
             objRight = APIObjectUserRight()
             objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
             objRight.relatedRights = rights
             objRight.relatedUser = dict([('selfUrl', group.selfUrl)])
-            #res = self.postRequest('object-usr-rights', data = objRight.get())
-            #print(res)
+            res = self.postRequest('object-user-rights', data = objRight.get())
+            objRight.set(res)
 
         else:
             objRight = APIObjectGroupRight()
             objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
             objRight.relatedRights = rights
             objRight.relatedGroup = dict([('selfUrl', group.selfUrl)])
-            #res = self.postRequest('object-group-rights', data = objRight.get())
-            #print(res)
+            res = self.postRequest('object-group-rights', data = objRight.get())
+            objRight.set(res)
         return objRight
 
 
@@ -906,6 +1043,36 @@ class VSDConnecter:
         link.object2 = dict([('selfUrl', obj2.selfUrl)])
         
         return  self.postRequest('object-links', data = link.get())
+
+    def postFolder(self, parent, name):
+        ''' 
+        creates the folder with a given name (name) inside a folder (parent) if not already exists
+
+        :param parent: (APIFolder) the root folder
+        :param name: (str) name of the folder which should be created
+        :returns: (APIFolder) the folder object of the generated folder or the existing folder
+        '''
+         
+        folder = APIFolder()
+        folder.parentFolder = dict([('selfUrl', parent.selfUrl)])
+        folder.name = name
+
+        exists = False
+
+        if parent.childFolders:
+            for child in parent.childFolders:
+                fold = self.getFolder(child['selfUrl'])
+                if fold.name == name:
+                    print('folder {0} already exists'.format(name))
+                    exists = True
+
+        if not exists:
+            res = self.postRequest('folders', data = folder.get())
+            folder.set(obj = res)
+            print('folder {0} created, has id {1}'.format(name, folder.id))
+            return folder
+        else:
+            return fold
 
 
     
@@ -997,8 +1164,7 @@ class APIBasic(object):
 
 
     oKeys = list([
-        'id',
-        'selfUrl',
+       'selfUrl'
         ])
 
     def __init__(self, oKeys = oKeys):
@@ -1025,6 +1191,7 @@ class APIObject(APIBasic):
     API Object
     ''' 
     oKeys = list([
+        'id',
         'name',
         'type',
         'description',
@@ -1462,3 +1629,30 @@ class APIPagination(object):
         return self.__dict__
                                            
                                          
+class APIToken(object):
+    '''
+    API class to work with the tokens
+    '''
+    oKeys = list([
+        'tokenType',
+        'tokenValue'
+        ])
+
+    def __init__(self, oKeys = oKeys):
+        for v in oKeys:
+                setattr(self, v, None)
+
+        
+    def set(self, obj = None):
+        ''' sets class variable for each key in the object to the keyname and its value'''
+        if  obj:
+            for v in self.oKeys:
+                if v in obj: 
+                    setattr(self, v, obj[v])              
+        else:
+            for v in self.oKeys:
+                setattr(self, v, None)
+
+    def get(self):
+        '''transforms the class object into a json readable dict'''
+        return self.__dict__
