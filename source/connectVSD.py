@@ -146,20 +146,18 @@ class VSDConnecter:
             self.password = password
             token = self.getJWTtoken()
             self.token = token.tokenValue
-            self.token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXAiOiJKV1QiLCJleHAiOiIxNDM4MjY5Mzk0IiwibmJmIjoiMTQzODI2NTc5NCIsImlhdCI6IjE0MzgyNjU3OTQiLCJpc3MiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJhdWQiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJwcm4iOiIzIn0.HD-Q93zR-3yJKoq4R7gkWGswDwg2PfMXj18jWsiZ6ms'
             self.s.auth = JWTAuth(self.token)
-            self._validate_exp()
+        
            
 
     
-    def httpResponseCheck(self, response):
+    def _httpResponseCheck(self, response):
         '''
         check the response of a request call to the resouce. 
         '''
         
         try:
             response.raise_for_status()
-            print(response.status_code)
             return True, response.status_code
 
         except requests.exceptions.HTTPError as e:
@@ -186,6 +184,8 @@ class VSDConnecter:
             else:
                 self.s.auth = JWTAuth(self.token)
                 return True
+        else:
+            return True
 
     def _stayAlive(self):
         '''
@@ -206,17 +206,12 @@ class VSDConnecter:
         token = False
         res = requests.get(self.url + 'tokens/jwt', auth = (self.username, self.password), verify = False)
 
-        if self.httpResponseCheck(res)[0]:
+        if self._httpResponseCheck(res)[0]:
             
             token = APIToken()
             token.set(obj = res.json())
-            print('tokenset for apitoken: ',token.tokenValue)
             try:
                 payload = jwt.decode(token.tokenValue, verify = False)
-                #tok = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXAiOiJKV1QiLCJleHAiOiIxNDM4MjY5Mzk0IiwibmJmIjoiMTQzODI2NTc5NCIsImlhdCI6IjE0MzgyNjU3OTQiLCJpc3MiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJhdWQiOiJodHRwczovL3d3dy52aXJ0dWFsc2tlbGV0b24uY2giLCJwcm4iOiIzIn0.HD-Q93zR-3yJKoq4R7gkWGswDwg2PfMXj18jWsiZ6ms'
-                #payload = jwt.decode(tok)
-
-                print('payload:', payload)
 
             except jwt.InvalidTokenError as e:
                 print('token invalid, try using Basic Auth{0}'.format(e))
@@ -241,6 +236,8 @@ class VSDConnecter:
             obj = APIObjectCtDef()
         elif apiObject.type == 5:
             obj = APIObjectCtData()
+        elif apiObject.type == 6:
+            obj = APIObjectSurfModel()
         else:
             obj = APIObject()
         return obj
@@ -278,7 +275,7 @@ class VSDConnecter:
 
         try: 
             res = self.s.get(self.fullUrl(resource), params = params)
-            if self.httpResponseCheck(res):
+            if self._httpResponseCheck(res):
                 if res.status_code == requests.codes.ok:
                     return res.json()
                 else: 
@@ -295,6 +292,9 @@ class VSDConnecter:
         :param fp: (Path) filepath 
         :returns: None or status_code ok (200)
         '''
+
+        self._stayAlive()
+
         res = self.s.get(self.fullUrl(resource), stream = True)
         if res.ok:
             with fp.open('wb') as f:
@@ -312,6 +312,8 @@ class VSDConnecter:
         :returns: None or status_code ok (200)
         '''
         
+        self._stayAlive()
+
         fp = Path(obj.name).with_suffix('.zip')
         if wp:
             fp = Path(wp, fn)
@@ -441,6 +443,9 @@ class VSDConnecter:
         :param data: (json) data to be added to the resource
         :returns: the resource object (json)
         '''
+
+        self._stayAlive()
+
         try:    
             req = self.s.post(self.fullUrl(resource), json = data)
             if req.status_code == requests.codes.created:
@@ -459,6 +464,9 @@ class VSDConnecter:
         :param data: (json) data to be added to the object
         :returns: the updated object (json)
         '''
+
+        self._stayAlive()
+
         try:    
             req = self.s.put(self.fullUrl(resource), json = data)
             if req.status_code == requests.codes.ok:
@@ -476,10 +484,16 @@ class VSDConnecter:
         :param resource: (str) resource path
         :returns: the resource object (json)
         '''
+
+        self._stayAlive()
+
         req = self.s.post(self.fullUrl(resource))
         return req.json()
 
     def putRequestSimple(self, resource):
+
+        self._stayAlive()
+
         req = self.s.put(self.fullUrl(resource))
         return req.json()
 
@@ -556,7 +570,7 @@ class VSDConnecter:
         else:
             url = self.fullUrl(resource) + '?$filter=startswith(Term,%27{0}%27)%20eq%20true'.format(search)
 
-        req = self.s.get(url)
+        req = self.getRequest(url)
         return req.json()
 
 
@@ -709,6 +723,8 @@ class VSDConnecter:
         else:
             url = self.url + "folders?$filter=startswith(Name,%27{0}%27)%20eq%20true".format(search)
 
+        self._stayAlive()
+
         res = self.s.get(url)
         if res.status_code == requests.codes.ok:
             result = list()
@@ -731,7 +747,7 @@ class VSDConnecter:
 
     def getFileListInFolder(self, ID):
         ''' not implemented yet '''
-        req = self.s.get(self.url+"folders/"+str(ID))
+        req = self.getRequest("folders/"+str(ID))
         return req.json()
        
 
@@ -774,6 +790,9 @@ class VSDConnecter:
         else:
             url = self.url+"ontologies/{0}?$filter=startswith(Term,%27{1}%27)%20eq%20true".format(oType,search)
 
+
+        self._stayAlive()
+
         res = self.s.get(url)
         if res.status_code == requests.codes.ok:
             result = list()
@@ -797,8 +816,10 @@ class VSDConnecter:
         :returns: ontology term entry (json)
         '''
 
-        url = self.url + "ontologies/{0}/{1}".format(oType,oid)
-        req = self.s.get(url)
+        self._stayAlive()
+
+        url = "ontologies/{0}/{1}".format(oType,oid)
+        req = self.getRequest(url)
         return req.json()
 
 
@@ -834,7 +855,7 @@ class VSDConnecter:
             return None
 
     def getObjectRightList(self):
-        ''' retrieve a list of the available base object rights (APIObjecRight) '''
+        ''' retrieve a list of the available base object rights (APIObjectRight) '''
         
         res = self.getRequest('object_rights')
         permission = list()
@@ -848,10 +869,10 @@ class VSDConnecter:
         return permission
 
     def getObjectRight(self, resource):
-        ''' retrieve a  object rights object (APIObjecRight) 
+        ''' retrieve a  object rights object (APIObjectRight) 
         
         :param resource: resource to the permission id (int) or selfurl (str)
-        :return: perm (APIObjecRight) object
+        :return: perm (APIObjectRight) object
         '''
 
         if isinstance(resource, int):
@@ -859,7 +880,7 @@ class VSDConnecter:
         res = self.getRequest(resource)
 
         if res:
-            perm = APIObjecRight()
+            perm = APIObjectRight()
             perm.set(obj = res)
             return perm
         else:
@@ -1139,14 +1160,16 @@ class VSDConnecter:
         :param obj: (APIObject) the object to copy
         :returns: updated folder (APIFolder)
         '''    
-        objSelfUrl = dict([('selfUrl',obj.selfUrl,)])
+        objSelfUrl = dict([('selfUrl',obj.selfUrl)])
         objects = target.containedObjects
+        
         if not objects:
             objects = list()
         if objects.count(objSelfUrl) == 0:
             objects.append(objSelfUrl)
             target.containedObjects = objects
-            res = self.putRequest('folders/', data = target.get())
+            res = self.putRequest('folders', data = target.get())
+
             if not isinstance(res, int):
                 target = APIFolder()
                 target.set(obj = res)
@@ -1318,12 +1341,34 @@ class APIObjectCtData(APIObject):
         return super(APIObject, self).get()
 
 
+class APIObjectSurfModel(APIObject):
+    """docstring for APIObjectSurfModel"""
+    oKeys = list([
+        'Facet',
+        'Vertex'
+        ])
+    
+
+    for i in APIObject.oKeys:
+        oKeys.append(i)
+
+    def __init__(self):
+        super(APIObject, self).__init__(self.oKeys) 
+
+    def set(self, obj = None):
+        super(APIObject, self).set(obj = obj)
+
+    def get(self):
+        '''transforms the class object into a json readable dict'''
+        return super(APIObject, self).get()
+
 
 class APIFolder(APIBasic):
     '''
     Folder API Object
     '''
     oKeys = list([
+        'id',
         'name',
         'level',
         'parentFolder',
@@ -1351,6 +1396,7 @@ class APIOntology(APIBasic):
     API class for ontology entries
     '''
     oKeys = list([
+        'id',
         'term',
         'type',
         ])
@@ -1373,6 +1419,7 @@ class APIObjectOntology(APIBasic):
     API class for object-ontology entries
     '''
     oKeys = list([
+        'id',
         'type',
         'object',
         'ontologyItem',
@@ -1397,6 +1444,7 @@ class APIFile(APIBasic):
     API class for files
     '''
     oKeys = list([
+        'id',
         'createdDate',
         'downloadUrl',
         'originalFileName',
@@ -1425,6 +1473,7 @@ class APILicense(APIBasic):
     API class for licenses
     '''
     oKeys = list([
+        'id',
         'description',
         'name',
         ])
@@ -1442,11 +1491,12 @@ class APILicense(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APILicense, self).get()
 
-class APIObjecRight(APIBasic):
+class APIObjectRight(APIBasic):
     '''
     API class for object rights
     '''
     oKeys = list([
+        'id',
         'description',
         'name',
         ])
@@ -1455,14 +1505,14 @@ class APIObjecRight(APIBasic):
         oKeys.append(i)
 
     def __init__(self):
-        super(APIObjecRight, self).__init__(self.oKeys) 
+        super(APIObjectRight, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
-        super(APIObjecRight, self).set(obj = obj)
+        super(APIObjectRight, self).set(obj = obj)
 
     def get(self):
         '''transforms the class object into a json readable dict'''
-        return super(APIObjecRight, self).get()
+        return super(APIObjectRight, self).get()
    
 
 class APIObjectLink(APIBasic):
@@ -1470,6 +1520,7 @@ class APIObjectLink(APIBasic):
     API class for object links
     '''
     oKeys = list([
+        'id',
         'description',
         'object1',
         'object2',
@@ -1493,6 +1544,7 @@ class APIModality(APIBasic):
     API class for modalities
     '''
     oKeys = list([
+        'id',
         'description',
         'name'
         ])
@@ -1515,6 +1567,7 @@ class APIObjectGroupRight(APIBasic):
     API class for object group rights
     '''
     oKeys = list([
+        'id',
         'relatedObject',
         'relatedRights',
         'relatedGroup'
@@ -1538,6 +1591,7 @@ class APIObjectUserRight(APIBasic):
     API class for object user rights
     '''
     oKeys = list([
+        'id',
         'relatedObject',
         'relatedRights',
         'relatedUser'
@@ -1561,6 +1615,7 @@ class APIGroup(APIBasic):
     API class for groups
     '''
     oKeys = list([
+        'id',
         'Chief',
         'name'
         ])
@@ -1583,6 +1638,7 @@ class APIUser(APIBasic):
     API class for users
     '''
     oKeys = list([
+        'id',
         'username'
         ])
 
