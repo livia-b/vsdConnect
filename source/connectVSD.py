@@ -782,7 +782,7 @@ class VSDConnecter:
         :param search: (str) string to be searched
         :param oType: (int) ontlogy resouce code, default is FMA (0)
         :param mode: (str) find exact term (exact) or partial match (default)
-        :returns: ontology term entries (json)
+        :returns: a list of ontology (APIOntoly) objects or a single ontology item (APIOntology)
         '''
         search = urlparse_quote(search)
         if mode == 'exact':
@@ -796,7 +796,14 @@ class VSDConnecter:
         res = self.s.get(url)
         if res.status_code == requests.codes.ok:
             result = list()
+            
             res = res.json()
+
+            if len(res['items']) == 1:
+                onto = APIOntology()
+                onto.set(res['items'][0])
+                print('1 folder matching the search found')
+                return onto
             for item in iter(res['items']):
                 onto = APIOntology()
                 onto.set(item)
@@ -1053,7 +1060,7 @@ class VSDConnecter:
 
             
     def addLink(self, obj1, obj2):
-        ''' add a object link 
+        ''' add an object link 
 
         :param obj1: (APIBasic) an link object with selfUrl 
         :param obj2: (APIBasic) an link object with selfUrl
@@ -1064,6 +1071,29 @@ class VSDConnecter:
         link.object2 = dict([('selfUrl', obj2.selfUrl)])
         
         return  self.postRequest('object-links', data = link.get())
+
+    def addOntologyToObject(self, obj, ontology, pos = 0):
+        ''' add an ontoly term to an object
+
+        :param obj: (APIBasic) object
+        :param ontology: (APIOntology) ontology object
+        :param pos: (int) position of the ontology term, default = 1
+        :return isset: (Bool) returns true if successfully added'''
+        isset = False
+        if isinstance(pos, int):
+                onto = APIObjectOntology()
+                onto.position = pos
+                onto.object = dict([('selfUrl', obj.selfUrl)])
+                onto.ontologyItem = dict([('selfUrl', ontology.selfUrl)])
+                onto.type = ontology.type
+
+                res = self.postRequest('object-ontologies/{0}'.format(ontology.type), data = onto.get())
+                if res:
+                    isset = True
+        else:
+            print('position needs to be a number (int)')
+        
+        return isset
 
     def postFolder(self, parent, name):
         ''' 
