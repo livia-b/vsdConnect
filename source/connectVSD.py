@@ -258,9 +258,32 @@ class VSDConnecter:
         else:
             return self.url + resource
 
+
+
+    def optionsRequest(self, resource):
+        '''
+        generic options request function
+
+        :param resource: (str) resource path
+        :returns: json result or None
+        '''
+
+        self._stayAlive()
+
+        try: 
+            res = self.s.options(self.fullUrl(resource))
+            if self._httpResponseCheck(res):
+                if res.status_code == requests.codes.ok:
+                    return res.json()
+                else: 
+                    return None
+        except requests.exceptions.RequestException as err:
+            print('option request failed:', err)
+            return None
+
     def getRequest(self, resource, rpp = None, page = None, include = None):
         '''
-        generic request function
+        generic get request function
 
         :param resource: (str) resource path
         :param rpp: (int) results per page to show
@@ -431,11 +454,6 @@ class VSDConnecter:
             return res
 
         
-    def optionsRequest(self, resource):
-        '''get list of available OPTIONs for a resource'''
-        req = self.s.options(self.fullUrl(resource))
-        return req.json()        
-
     def postRequest(self, resource, data):
         '''add data to an object
 
