@@ -1227,7 +1227,34 @@ class VSDConnecter:
         else:
             return target
 
+    def removeObjectFromFolder(self, target, obj):
+        '''
+        add an object to the folder
+    
+        :param target: (APIFolder) the target folder 
+        :param obj: (APIObject) the object to remove
+        :returns: updated folder (APIFolder)
+        '''  
 
+        objSelfUrl = dict([('selfUrl',obj.selfUrl)])
+        objects = target.containedObjects
+        
+        isset = False
+        
+        if objects:
+            if objects.count(objSelfUrl) > 0 :
+                objects.remove(objSelfUrl)
+                target.containedObjects = objects
+                res = self.putRequest('folders', data = target.get())
+
+                if not isinstance(res, int):
+                    isset = True
+            else:
+                print('object not part of that folder')
+        else:
+            print('folder containes no objects')
+
+        return isset
 
         
 class APIBasic(object):
