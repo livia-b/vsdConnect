@@ -998,7 +998,9 @@ class VSDConnecter:
 
     def getPermissionSets(self, permset = 'default'):
         '''
-        :param permset: (str) name of the permission set: available are private, protect, default, collaborate
+        get the Object Rights for a permission set
+
+        :param permset: (str) name of the permission set: available are private, protect, default, collaborate, full or a list of permission ids (list)
         :return perms: list of object rights objects (APIObjectRight) 
         '''
 
@@ -1010,12 +1012,55 @@ class VSDConnecter:
             lperms = list([2,3,4])
         elif permset == 'collaborate': 
             lperms = list([2,3,4,5])
+        elif permset == 'full': 
+            lperms = list([2,3,4,5,6])
+        else:
+            lperms = permset
 
         perms = list()
         for pid in lperms:
             perms.append(self.getObjectRight(pid))
 
         return perms
+
+    def getObjectGroupRights(self, obj):
+        '''
+        get the list of attaced group rights of an object
+
+        :param obj: the object (APIObject)
+        :returns rights: a list of ObjectGroupRights (APIObjectGroupRight)
+        '''
+
+        rights = None
+        if obj.objectGroupRights:
+            rights = list()
+            for item in obj.objectGroupRights:
+                res = self.getRequest(item['selfUrl'])
+                right = APIObjectGroupRight()
+                right.set(obj = res)
+                rights.append(right)
+
+        return rights
+
+
+    def getObjectUserRights(self, obj):
+        '''
+        get the list of attaced user rights of an object
+
+        :param obj: the object (APIObject)
+        :returns rights: a list of ObjectUserRights (APIObjectUserRight)
+        '''
+
+        rights = None
+        if obj.objectUserRights:
+            rights = list()
+            for item in obj.objectUserRights:
+                res = self.getRequest(item['selfUrl'])
+                right = APIObjectUserRight()
+                right.set(obj = res)
+                rights.append(right)
+
+        return rights
 
 
     def postObjectRights(self, obj, group, perms, isuser = False):
@@ -1077,15 +1122,14 @@ class VSDConnecter:
 
         return objRight
 
-        def postObjectGroupRights(self, obj, group, perms):
+    def postObjectGroupRights(self, obj, group, perms):
         ''' translate a set of permissions and a group into the appropriate format and add it to the object
 
         :param obj: (API Object) the object you want to add the permissions to 
         :param group: (APIGroup) group object
         :param perms: (list) list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
 
-        :return objRight: group rights (APIObjectGroupRight) object
-        ''' 
+        :return objRight: group rights (APIObjectGroupRight) object  ''' 
 
         #creat the dict of rights
         rights = list()
@@ -1334,6 +1378,41 @@ class VSDConnecter:
             print('folder containes no objects')
 
         return isset
+
+    def showObjectInformation(self, obj):
+        '''
+        display the object information user readable format
+
+        :param obj: object (APIObject)
+        '''
+
+        print('---------General Information ----------')
+        print('description:', obj.description)
+        print('todo')
+
+        print('---------License----------')
+        print('todo')
+
+        print('---------User Rights----------')
+        ur = self.getObjectUserRights(obj)
+        for u in ur:
+            user = self.getUser(u.relatedUser['selfUrl'])
+            print('user:')
+            print(user.get())
+            print('rights:')
+            for r in u.relatedRights:
+                print(self.getObjectRight(r['selfUrl']).get())
+        
+        print('---------User Rights----------')
+        gr = self.getObjectGroupRights(obj)
+        for g in gr:
+            group = self.getGroup(g.relatedGroup['selfUrl'])
+            print('group:')
+            print(group.get())
+            print('rights:')
+            for r in u.relatedRights:
+                print(self.getObjectRight(r['selfUrl']).get())
+            
 
         
 class APIBasic(object):
