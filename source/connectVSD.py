@@ -549,6 +549,8 @@ class VSDConnecter:
             if req.status_code == requests.codes.ok:
                 print('object {0} deleted'.format(obj.id))
                 return req.status_code
+            else:
+                print('not deleted', req.status_code)
 
         except requests.exceptions.RequestException as err:
             print('del request failed:',err)
@@ -666,7 +668,7 @@ class VSDConnecter:
             else:
                 return None
         else:
-            print('no uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, method))
+            print('not uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, method))
             return None
  
 
@@ -716,6 +718,25 @@ class VSDConnecter:
         obj = data['relatedObject']
         fSelfUrl = f['selfUrl']
         return obj['selfUrl'], self.getOID(obj['selfUrl'])
+
+
+    def getAllUnpublishedObjects(self, resource = 'objects/unpublished'):
+        ''' retrieve the unpublished objects as list of APIObject
+
+        :param resource: (str) resource path (eg nextPageUrl) or default groups
+        :param rpp: (int) results per page
+        :param page: (int) page to display
+        :returns: list of objects (APIObjects) 
+        '''
+
+        objects = list()
+        res = self.getAllPaginated(resource)
+
+        for item in res:
+            obj = self.getObject(item.get('selfUrl'))
+            objects.append(obj)
+        return objects
+
 
     def getLatestUnpublishedObject(self):
         ''' searches the list of unpublished objects and returns the newest object  '''
@@ -1240,7 +1261,7 @@ class VSDConnecter:
         objects = target.containedObjects
         
         isset = False
-        
+
         if objects:
             if objects.count(objSelfUrl) > 0 :
                 objects.remove(objSelfUrl)
