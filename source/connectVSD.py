@@ -611,6 +611,8 @@ class VSDConnecter:
             return
 
         res = self.s.post(self.url + 'upload', files = files)  
+        print(res.status_code)
+        print(res)
         if res.status_code == requests.codes.created:
             obj = self.getAPIObjectType(res)
             obj.set(obj = res)
@@ -741,9 +743,12 @@ class VSDConnecter:
     def getLatestUnpublishedObject(self):
         ''' searches the list of unpublished objects and returns the newest object  '''
         res = self.getRequest('objects/unpublished')
-
-        obj = self.getObject(res['items'][0].get('selfUrl'))
-        return obj
+        if len(res['items']) > 0:
+            obj = self.getObject(res['items'][0].get('selfUrl'))
+            return obj
+        else: 
+            print('you have no unpublished objects')
+            return None
 
    
                 
@@ -841,7 +846,7 @@ class VSDConnecter:
             if len(res['items']) == 1:
                 onto = APIOntology()
                 onto.set(res['items'][0])
-                print('1 folder matching the search found')
+                print('1 ontology term matching the search found')
                 return onto
             for item in iter(res['items']):
                 onto = APIOntology()
@@ -1014,10 +1019,11 @@ class VSDConnecter:
 
 
     def postObjectRights(self, obj, group, perms, isuser = False):
-        ''' translate a set of permissions and a group into the appropriate format and add it to the object
+        ''' DEPRECATED: user postObjectGroupRights or postObjectUserRights! 
+        translate a set of permissions and a group into the appropriate format and add it to the object
 
         :param obj: (API Object) the object you want to add the permissions to 
-        :param group: (int) group id or user id
+        :param group: (APIGroup or APIUser) group object or user object
         :param perms: (list) list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
         :param isuser: (bool) set True if the groups variable is a user. Default is False 
 
@@ -1045,6 +1051,58 @@ class VSDConnecter:
             res = self.postRequest('object-group-rights', data = objRight.get())
             objRight.set(res)
         return objRight
+
+    def postObjectUserRights(self, obj, user, perms):
+        ''' translate a set of permissions and a user into the appropriate format and add it to the object
+
+        :param obj: (API Object) the object you want to add the permissions to 
+        :param group: (APIUser) user object
+        :param perms: (list) list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
+
+        :return objRight: user rights (APIObjectUserRight) object
+        ''' 
+
+        #creat the dict of rights
+        rights = list()
+        for perm in perms:
+            rights.append(dict([('selfUrl', perm.selfUrl)]))
+
+        objRight = APIObjectUserRight()
+        objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
+        objRight.relatedRights = rights
+        objRight.relatedUser = dict([('selfUrl', user.selfUrl)])
+
+        res = self.postRequest('object-user-rights', data = objRight.get())
+        objRight.set(res)
+
+        return objRight
+
+        def postObjectGroupRights(self, obj, group, perms):
+        ''' translate a set of permissions and a group into the appropriate format and add it to the object
+
+        :param obj: (API Object) the object you want to add the permissions to 
+        :param group: (APIGroup) group object
+        :param perms: (list) list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
+
+        :return objRight: group rights (APIObjectGroupRight) object
+        ''' 
+
+        #creat the dict of rights
+        rights = list()
+
+        for perm in perms:
+            rights.append(dict([('selfUrl', perm.selfUrl)]))
+
+        objRight = APIObjectGroupRight()
+        objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
+        objRight.relatedRights = rights
+        objRight.relatedGroup = dict([('selfUrl', group.selfUrl)])
+
+        res = self.postRequest('object-group-rights', data = objRight.get())
+        objRight.set(res)
+
+        return objRight
+
 
 
 
