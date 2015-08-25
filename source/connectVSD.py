@@ -804,8 +804,9 @@ class VSDConnecter:
         if folder.childFolders:
 
             for fold in folder.childFolders:
-
-                f = self.getFolder(fold['selfUrl'])
+                basic = APIBasic()
+                basic.set(obj = fold)
+                f = self.getFolder(basic.selfUrl)
                 folderlist.append(f)
 
             return folderlist
@@ -825,12 +826,10 @@ class VSDConnecter:
         if folder.containedObjects:
 
             for obj in folder.containedObjects:
-                print(obj)
                 basic = APIBasic()
                 basic.set(obj = obj)
                 o = self.getObject(basic.selfUrl)
                 objlist.append(o)
-
             return objlist
         else:
             print('the folder does not contained objects')
@@ -847,7 +846,7 @@ class VSDConnecter:
         :param search: (str) string to be searched
         :param oType: (int) ontlogy resouce code, default is FMA (0)
         :param mode: (str) find exact term (exact) or partial match (default)
-        :returns: a list of ontology (APIOntoly) objects or a single ontology item (APIOntology)
+        :returns: a list of ontology (APIOntolgy) objects or a single ontology item (APIOntology)
         '''
         search = urlparse_quote(search)
         if mode == 'exact':
@@ -879,7 +878,7 @@ class VSDConnecter:
 
 
         
-    def getOntologyTermByID(self, oid, oType = "0"):
+    def getOntologyTermByID(self, oid, oType = 0):
         '''
         Retrieve an ontology entry based on the IRI
 
@@ -893,6 +892,31 @@ class VSDConnecter:
         url = "ontologies/{0}/{1}".format(oType,oid)
         req = self.getRequest(url)
         return req.json()
+
+
+    def getOntologyItem(self, resource, oType = 0):
+        '''
+        Retrieve an ontology item object (APIOntology)
+        
+        :param resource: (int or str) resource path to the of the ontology item
+        :param oType: ontology type (int)
+        :return onto: (APIOntology) the ontology item object
+        '''
+
+        self._stayAlive()
+
+        if isinstance(resource, int):
+            resource = 'ontology/{0}/{1}'.format(resource, oType)
+        
+        res = self.getRequest(resource)
+
+        if res:
+            onto = APIOntology()
+            onto.set(obj = res)
+        
+            return onto
+        else:
+            return None
 
 
     def getLicenseList(self):
@@ -1185,6 +1209,27 @@ class VSDConnecter:
         else:
             return items
 
+    def getModality(self, resource):
+        ''' retrieve a modalities object (APIModality)
+
+
+        :param resource: (int or str) resource path to the of the license
+        :return license: (APIModality) the modality object
+        '''
+        
+        if isinstance(resource, int):
+            resource = 'modalities/{0}'.format(resource)
+        
+        res = self.getRequest(resource)
+        if res:
+            mod = APIModality()
+            mod.set(obj = res)
+        
+            return mod
+        else:
+            return None
+
+
     def readFolders(self,folderList):
     #first pass: create one entry for each folder:
         folderHash={}
@@ -1408,11 +1453,53 @@ class VSDConnecter:
         '''
 
         print('---------General Information ----------')
-        print('description:', obj.description)
+        if obj.description is not None: 
+            print('description:', obj.description)
+        if obj.name is not None:
+            print('name: ', obj.name)
+        if obj.createdDate is not None:
+            print('creation date: ', obj.createdDate)
+        if obj.id is not None:
+            print('id: ', obj.id)
+        if obj.type is not None:
+            print('type: ', obj.type)
+
         print('todo')
 
-        print('---------License----------')
-        print('todo')
+        if obj.modality is not None:
+            print('---------Modality----------')
+            basic = APIBasic()
+            basic.set(obj = obj.modality)
+            mod = self.getModality(basic.selfUrl)
+
+            print('name: ', mod.name)
+            print('description', mod.description)
+            print('selfUrl: ', mod.selfUrl)
+            print('id: ', mod.id)
+
+
+
+        if obj.ontologyItems is not None:
+            print('---------Ontology items----------')
+            for onto in obj.ontologyItems:
+                basic = APIBasic()
+                basic.set(obj = onto)
+                ontology = self.getOntologyItem(basic.selfUrl)
+
+                print('Term: ', ontology.term)
+                print('type', ontology.type)
+                print('selfUrl: ', ontology.selfUrl)
+                print('id: ', ontology.id)
+
+        if obj.license is not None:
+            print('---------License----------')
+            basic = APIBasic()
+            basic.set(obj = obj.license)
+            lic = self.getLicense(basic.selfUrl)
+            print('name: \t\t', lic.name)
+            print('description:\t', lic.description)
+            print('selfUrl:\t\t', lic.selfUrl)
+            print('id:\t\t\t', lic.id)
 
         print('---------User Rights----------')
         ur = self.getObjectUserRights(obj)
@@ -1424,8 +1511,10 @@ class VSDConnecter:
                 print('rights:')
                 for r in u.relatedRights:
                     print(self.getObjectRight(r['selfUrl']).get())
+        else: 
+            print('nothing here')
         
-        print('---------User Rights----------')
+        print('---------GroupRights----------')
         gr = self.getObjectGroupRights(obj)
         if gr:
             for g in gr:
@@ -1435,7 +1524,8 @@ class VSDConnecter:
                 print('rights:')
                 for r in g.relatedRights:
                     print(self.getObjectRight(r['selfUrl']).get())
-            
+        else: 
+            print('nothing here')
 
         
 class APIBasic(object):
@@ -1464,6 +1554,9 @@ class APIBasic(object):
         '''transforms the class object into a json readable dict'''
         return self.__dict__
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
 class APIObject(APIBasic):
     '''
@@ -1502,6 +1595,10 @@ class APIObject(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIObject, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObject, self).show()
+
 
 class APIObjectRaw(APIObject):
     """docstring for APIObjectRaw"""
@@ -1524,6 +1621,10 @@ class APIObjectRaw(APIObject):
         '''transforms the class object into a json readable dict'''
         return super(APIObject, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObject, self).show()
+
 class APIObjectSeg(APIObject):
     """docstring for APIObjectSeg"""
     oKeys = list([
@@ -1545,6 +1646,11 @@ class APIObjectSeg(APIObject):
         '''transforms the class object into a json readable dict'''
         return super(APIObject, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObject, self).show()
+
+
 class APIObjectSm(APIObject):
     """docstring for APIObjectSm"""
     oKeys = list()
@@ -1561,6 +1667,10 @@ class APIObjectSm(APIObject):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIObject, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObject, self).show()
 
 class APIObjectCtDef(APIObject):
     """docstring for APIObjectCtDef"""
@@ -1579,6 +1689,10 @@ class APIObjectCtDef(APIObject):
         '''transforms the class object into a json readable dict'''
         return super(APIObject, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObject, self).show()
+
 class APIObjectCtData(APIObject):
     """docstring for APIObjectCtData"""
     oKeys = list()
@@ -1595,6 +1709,10 @@ class APIObjectCtData(APIObject):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIObject, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObject, self).show()
 
 
 class APIObjectSurfModel(APIObject):
@@ -1617,6 +1735,10 @@ class APIObjectSurfModel(APIObject):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIObject, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObject, self).show()
 
 
 class APIFolder(APIBasic):
@@ -1646,6 +1768,10 @@ class APIFolder(APIBasic):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIFolder, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIFolder, self).show()
   
 class APIOntology(APIBasic):
     '''
@@ -1669,6 +1795,10 @@ class APIOntology(APIBasic):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIOntology, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIOntology, self).show()
 
 class APIObjectOntology(APIBasic):
     '''
@@ -1694,6 +1824,10 @@ class APIObjectOntology(APIBasic):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIObjectOntology, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObjectOntology, self).show()
 
 class APIFile(APIBasic):
     '''
@@ -1722,7 +1856,9 @@ class APIFile(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIFile, self).get()
 
-
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIFile, self).show()
 
 class APILicense(APIBasic):
     '''
@@ -1747,6 +1883,10 @@ class APILicense(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APILicense, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APILicense, self).show()
+
 class APIObjectRight(APIBasic):
     '''
     API class for object rights
@@ -1770,6 +1910,9 @@ class APIObjectRight(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIObjectRight, self).get()
    
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObjectRight, self).show()
 
 class APIObjectLink(APIBasic):
     '''
@@ -1795,6 +1938,10 @@ class APIObjectLink(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIObjectLink, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObjectLink, self).show()
+
 class APIModality(APIBasic):
     '''
     API class for modalities
@@ -1817,6 +1964,10 @@ class APIModality(APIBasic):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIModality, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIModality, self).show()
 
 class APIObjectGroupRight(APIBasic):
     '''
@@ -1842,6 +1993,10 @@ class APIObjectGroupRight(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIObjectGroupRight, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObjectGroupRight, self).show()
+
 class APIObjectUserRight(APIBasic):
     '''
     API class for object user rights
@@ -1866,6 +2021,10 @@ class APIObjectUserRight(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIObjectUserRight, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIObjectUserRight, self).show()
+
 class APIGroup(APIBasic):
     '''
     API class for groups
@@ -1889,6 +2048,10 @@ class APIGroup(APIBasic):
         '''transforms the class object into a json readable dict'''
         return super(APIGroup, self).get()
 
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIGroup, self).show()
+
 class APIUser(APIBasic):
     '''
     API class for users
@@ -1910,6 +2073,10 @@ class APIUser(APIBasic):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return super(APIUser, self).get()
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        super(APIUser, self).show()
 
 class APIPagination(object):
     '''
@@ -1939,7 +2106,10 @@ class APIPagination(object):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return self.__dict__
-                                           
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))                             
                                          
 class APIToken(object):
     '''
@@ -1968,3 +2138,7 @@ class APIToken(object):
     def get(self):
         '''transforms the class object into a json readable dict'''
         return self.__dict__
+
+    def show(self):
+        '''prints the json to the console, nicely printed'''
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
