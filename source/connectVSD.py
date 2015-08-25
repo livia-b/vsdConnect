@@ -339,7 +339,7 @@ class VSDConnecter:
 
         fp = Path(obj.name).with_suffix('.zip')
         if wp:
-            fp = Path(wp, fn)
+            fp = Path(wp, fp)
 
         res = self.s.get(self.fullUrl(obj.downloadUrl), stream = True)
         if res.ok:
@@ -605,14 +605,15 @@ class VSDConnecter:
         '''
         try:
             data = filename.open(mode = 'rb').read()
+            ##workaround for file without file extensions
+            if filename.suffix =='':
+                filename = filename.with_suffix('.dcm')
             files  = { 'file' : (str(filename.name), data)}
         except:
             print ("opening file", filename, "failed, aborting")
             return
 
         res = self.s.post(self.url + 'upload', files = files)  
-        print(res.status_code)
-        print(res)
         if res.status_code == requests.codes.created:
             obj = self.getAPIObjectType(res)
             obj.set(obj = res)
@@ -653,6 +654,7 @@ class VSDConnecter:
             for chunk in self.chunkedread(fp, chunksize):
                 part = part + 1
                 print('uploading part {0} of {1}'.format(part,parts))
+
                 files  = { 'file' : (str(fp.name), chunk)}
                 res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files = files)
                 if res.status_code == requests.codes.ok:
@@ -663,10 +665,11 @@ class VSDConnecter:
             if not err:
                 resource = 'chunked_upload/commit?filename={0}'.format(fp.name)
                 res = self.postRequestSimple(resource)
+                
                 relObj = res['relatedObject']
                 obj = self.getObject(relObj['selfUrl'])
-              
                 return obj
+                
             else:
                 return None
         else:
@@ -789,18 +792,12 @@ class VSDConnecter:
         else:
             return res.status_code
 
-    def getFileListInFolder(self, ID):
-        ''' not implemented yet '''
-        req = self.getRequest("folders/"+str(ID))
-        return req.json()
-       
-
     def getContainedFolders(self, folder):
         '''
         return a list of folder object contained in a folder
 
         :param folder: folder (APIFolder) object
-        :return folderlis: a list of folder object contained in the folder
+        :return folderlist: a list of folder object (APIFolder) contained in the folder
         '''
 
         folderlist = list()
@@ -809,13 +806,37 @@ class VSDConnecter:
             for fold in folder.childFolders:
 
                 f = self.getFolder(fold['selfUrl'])
-                folderlist.append(f.selfUrl)
-                print(f.selfUrl)
+                folderlist.append(f)
 
             return folderlist
         else:
             print('the folder does not have any contained folders')
             return None
+
+    def getContainedObjects(self, folder):
+        '''
+        return a list of object contained in a folder
+
+        :param folder: folder (APIFolder) object
+        :return objlist: a list of objects (APIFObject) contained in the folder
+        '''
+
+        objlist = list()
+        if folder.containedObjects:
+
+            for obj in folder.containedObjects:
+                print(obj)
+                basic = APIBasic()
+                basic.set(obj = obj)
+                o = self.getObject(basic.selfUrl)
+                objlist.append(o)
+
+            return objlist
+        else:
+            print('the folder does not contained objects')
+            return None
+
+
 
 
 
@@ -1395,23 +1416,25 @@ class VSDConnecter:
 
         print('---------User Rights----------')
         ur = self.getObjectUserRights(obj)
-        for u in ur:
-            user = self.getUser(u.relatedUser['selfUrl'])
-            print('user:')
-            print(user.get())
-            print('rights:')
-            for r in u.relatedRights:
-                print(self.getObjectRight(r['selfUrl']).get())
+        if ur:
+            for u in ur:
+                user = self.getUser(u.relatedUser['selfUrl'])
+                print('user:')
+                print(user.get())
+                print('rights:')
+                for r in u.relatedRights:
+                    print(self.getObjectRight(r['selfUrl']).get())
         
         print('---------User Rights----------')
         gr = self.getObjectGroupRights(obj)
-        for g in gr:
-            group = self.getGroup(g.relatedGroup['selfUrl'])
-            print('group:')
-            print(group.get())
-            print('rights:')
-            for r in u.relatedRights:
-                print(self.getObjectRight(r['selfUrl']).get())
+        if gr:
+            for g in gr:
+                group = self.getGroup(g.relatedGroup['selfUrl'])
+                print('group:')
+                print(group.get())
+                print('rights:')
+                for r in g.relatedRights:
+                    print(self.getObjectRight(r['selfUrl']).get())
             
 
         
