@@ -630,18 +630,18 @@ class VSDConnecter:
         except:
             logging.error("opening file %s failed, aborting" %filename, exc_info= True)
             return
-##check if it's still necessary with the new version
-##        res = self.s.post(self.url + 'upload', files = files)
+
+        res = self.s.post(self.url + 'upload', files = files)
 ##        if ret_response:
 ##                return res
-##        if res.status_code in [requests.codes.created, requests.codes.ok] :
-##            result = res.json() # {file: {selfUrl: ...}, relatedObject: {selfUrl}}
-##            res_file = {'selfUrl': result['file']['selfUrl']} # 'objects': [result['relatedObject']['selfUrl']] it's the second last in case of segmentations
-##            if res.status_code == requests.codes.ok:
-##                logging.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
-##            obj = APIFile() #obj = self.getAPIObjectType(res_file)
-##            obj.set(obj = res_file)
-##end my old  version
+        if res.status_code in [requests.codes.created, requests.codes.ok] :
+            result = res.json() # {file: {selfUrl: ...}, relatedObject: {selfUrl}}
+            res_file = {'selfUrl': result['file']['selfUrl']} # 'objects': [result['relatedObject']['selfUrl']] it's the second last in case of segmentations
+            if res.status_code == requests.codes.ok:
+                logging.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
+            #obj = APIFile()
+            obj = self.getAPIObjectType(res_file)
+            obj.set(obj = res_file)
             return obj
         else: 
             return res.status_code

@@ -123,22 +123,36 @@ def main():
 
     sys.exit()
 
-def ResumeUploading(con, folderList, pattern = '*.DCM' ):
+def ResumeUploading(con, folderList, pattern = '*.DCM' , writeToFile = None):
     #todo: merge with check missing slices
     #importlib.reload(connectVSD)
+    for i in range(3):
+        folders = con.getFolderByName('HEAREU')
+        logging.debug(folders)
+        if folders:
+            if isinstance(folders, connectVSD.APIFolder):
+                folder = folders
+            else:
+                folder = folders[0]
+            break
+    results_list = []
+    row_results = ['folderName','NFiles','UploadedFiles', 'FilesInError', 'VSDID', 'DataInfo']
+    results_list.append(row_results)
     for folder in folderList:
+      try:  
         logging.info(folder)
         dicomfiles =[f for f in  Path(folder).glob(pattern)]
         #dicomfiles = glob.glob(folder+pattern)
         nfiles = len(dicomfiles)
+        row_results = [folder, nfiles]
         upload1 =  con.uploadFile(dicomfiles[0])
         logging.debug(upload1)
         if isinstance(upload1,int):
             logging.error(connectVSD.statusDescription(upload1))
         fileAPIObject = con.getFile(upload1.selfUrl)
         print(connectVSD.statusDescription(fileAPIObject))
-        id = fileAPIObject.objects[-1]['selfUrl']
-        id_info = con.getObject(id) #info on the object to which the file belongs
+        VSDid = fileAPIObject.objects[-1]['selfUrl']
+        id_info = con.getObject(VSDid) #info on the object to which the file belongs
 
         nfiles_uploaded = len(id_info.files)
         datainfo = ""
@@ -148,22 +162,32 @@ def ResumeUploading(con, folderList, pattern = '*.DCM' ):
                 datainfo += "%s\t" % (img.get(tag,default=' '))
         except:
             pass
-        print('File %s uploaded to object %s [%d / %d files] \t %s' %(upload1.selfUrl, Path(id).name, len(id_info.files), nfiles, datainfo))
+        print('File %s uploaded to object %s [%d / %d files] \t %s' %(upload1.selfUrl, Path(VSDid).name, len(id_info.files), nfiles, datainfo))
         #suppose that the files were uplaoded in the same order
         uploadedObjects, filesInError = UploadFiles([Path(i) for i in dicomfiles[nfiles_uploaded:]], con, 3)
-        id_info2 = con.getObject(id)
+        id_info2 = con.getObject(VSDid)
         if not(len(id_info2.files) == nfiles):
             logging.error("Uploaded %d files of %d "  %(len(id_info2.files) ,nfiles) )
 
-        folders = con.getFolderByName('HEAREU')
-        logging.debug(folders)
-        folder = folders[0]
+        row_results += [str(len(uploadedObjects)),str(len(filesInError)) ,upload1.selfUrl ] + datainfo.split('\t')
+
+
 
         for obj in uploadedObjects:
             print("Copying object %s to target folder %s " %(obj, folder.name))
             objID= con.getObject(obj)
             res = con.addObjectToFolder(folder, objID)
             logging.info(res)
+        
+        results_list.append(row_results)
+      except:
+        logging.error(folder, exc_info=True)
+    import csv
+    if writeToFile:
+        with open(writeToFile, "w") as output:
+            writer = csv.writer(output, lineterminator='\n')
+            writer.writerows(results_list)
+        
 
 
 
