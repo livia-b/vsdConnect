@@ -466,10 +466,9 @@ class VSDConnecter:
 
         try:    
             req = self.s.post(self.fullUrl(resource), json = data)
-            if req.status_code == requests.codes.created:
-                return req.json()
-            else: 
-                return None
+            print('foler post code:', req.status_code)
+            #if req.status_code == requests.codes.created:
+            return req.json()
         except requests.exceptions.RequestException as err:
             print('request failed:',err)
             return None
@@ -797,6 +796,7 @@ class VSDConnecter:
         return a list of folder object contained in a folder
 
         :param folder: folder (APIFolder) object
+        :param recursive: (bool) get the folders list recursively
         :return folderlist: a list of folder object (APIFolder) contained in the folder
         '''
 
@@ -808,7 +808,6 @@ class VSDConnecter:
                 basic.set(obj = fold)
                 f = self.getFolder(basic.selfUrl)
                 folderlist.append(f)
-
             return folderlist
         else:
             print('the folder does not have any contained folders')
@@ -823,6 +822,7 @@ class VSDConnecter:
         '''
 
         objlist = list()
+
         if folder.containedObjects:
 
             for obj in folder.containedObjects:
@@ -832,11 +832,68 @@ class VSDConnecter:
                 objlist.append(o)
             return objlist
         else:
-            print('the folder does not contained objects')
+            print('the folder does not have any contained objects')
             return None
 
 
 
+    def getFolderContent(self, folder, recursive = False, mode = 'd'):
+        '''
+        get the objects and folder contained in the given folder. can be called recursive to travel and return all objects 
+
+        :param folder: (APIFolder) the folder to be read
+        :param recursive: (bool) travel the folder structure recursively or not (default)
+        :param mode: (str) what to return: only objects (o), only folders (f) or default (d) folders and objects
+        :return content: (dict) of folder (APIFolder) and object objects (APIObjects)
+        '''
+         
+        objectmode = False
+        foldermode = False 
+        
+        if mode == 'o':
+            objectmode = True
+
+        elif mode == 'f':
+            foldermode = True
+
+        elif mode == 'd':
+            objectmode = True
+            foldermode = True
+        else:
+            print('mode {0} not supported'.format(mode))
+
+
+        folders = self.getContainedFolders(folder)
+                    
+        temp = dict([('folder', folder),('object', None)])
+
+        if foldermode:
+            content = list([temp])
+        else:
+            content = list()
+
+        if objectmode:
+            objects = self.getContainedObjects(folder)
+
+            if objects is not None:
+                for obj in objects:
+                    temp = dict([('folder', folder),('object', obj)])
+                    content.append(temp)
+
+        if folders is not None:
+            if recursive:
+                for fold in folders:
+                    content.extend(self.getFolderContent(fold, mode = mode, recursive = True))
+
+            else:
+                if foldermode:
+                    for fold in folders:
+                        temp = dict([('folder', folder),('object', None)])
+                        content.append(temp)
+        
+        return content
+            
+            
 
 
     def searchOntologyTerm(self, search, oType = '0', mode = 'default'):
@@ -1302,12 +1359,13 @@ class VSDConnecter:
         
         return isset
 
-    def postFolder(self, parent, name):
+    def postFolder(self, parent, name, check = True):
         ''' 
         creates the folder with a given name (name) inside a folder (parent) if not already exists
 
         :param parent: (APIFolder) the root folder
         :param name: (str) name of the folder which should be created
+        :param check: (bool) it we should check if already exist, default = True
         :returns: (APIFolder) the folder object of the generated folder or the existing folder
         '''
          
@@ -1317,17 +1375,25 @@ class VSDConnecter:
 
         exists = False
 
-        if parent.childFolders:
-            for child in parent.childFolders:
-                fold = self.getFolder(child['selfUrl'])
-                if fold.name == name:
-                    print('folder {0} already exists'.format(name))
-                    exists = True
-
+        if check:
+            if parent.childFolders:
+                for child in parent.childFolders:
+                    basic = APIBasic()
+                    basic.set(obj = child)
+                    fold = self.getFolder(basic.selfUrl)
+                    if fold is not None:
+                        if fold.name == name:
+                            print('folder {0} already exists, id: {1}'.format(name, fold.id))
+                            exists = True    
+                    else:
+                        print('unexpected error, folder exists but cannot be retrieved')
+                        exists = True
+                    
         if not exists:
             res = self.postRequest('folders', data = folder.get())
-            folder.set(obj = res)
-            print('folder {0} created, has id {1}'.format(name, folder.id))
+            if res is not None:
+                folder.set(obj = res)
+                print('folder {0} created, has id {1}'.format(name, folder.id))
             return folder
         else:
             return fold
