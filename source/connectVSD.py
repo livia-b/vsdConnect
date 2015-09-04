@@ -796,7 +796,6 @@ class VSDConnecter:
         return a list of folder object contained in a folder
 
         :param folder: folder (APIFolder) object
-        :param recursive: (bool) get the folders list recursively
         :return folderlist: a list of folder object (APIFolder) contained in the folder
         '''
 
@@ -835,7 +834,22 @@ class VSDConnecter:
             print('the folder does not have any contained objects')
             return None
 
+    def deleteFolderContent(self, folder):
+        ''' delete all content from a folder (APIFolder)
 
+        :param folder: (APIFolder) a folder object
+        :return state: (bool) returns true if successful, else False
+        '''
+        state = False
+
+        folder.containedObjects = None
+        print(folder.get())
+        res = self.putRequest('folders', data = folder.get())
+        print(res)
+        if not isinstance(res, int):
+            state = True
+
+        return state
 
     def getFolderContent(self, folder, recursive = False, mode = 'd'):
         '''
@@ -1398,7 +1412,19 @@ class VSDConnecter:
         else:
             return fold
 
+    def deleteFolder(self, folder):
+        '''remove a folder (APIFolder)
 
+        :param folder: (APIFolder)
+        :return state: (bool) True if deleted, False if not
+        '''
+        state = False
+        self.deleteFolderContent(folder)
+        res = self.delRequest(folder.selfUrl)
+        if res == 200 or res == 204:
+            state = True
+        
+        return state
     
     def createFolderStructure(self, rootfolder, filepath, parents):
         ''' 
