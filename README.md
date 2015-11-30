@@ -44,6 +44,9 @@ This library implements a client for the REST API of the virtualskeletondatabase
 * Repo owner or admin
 * Other community or team contact
 
+## Problems
+* The server response is very slow if you have 50+ folders. VSD-connect makes a request to the server for each folder. Therefore, I will be slow if you have a lot of folders and use the folder methods. You should then use the getRequest function and create your APIFolder object locally.
+
 ## Get Started
 
 import connectVSD
