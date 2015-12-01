@@ -66,9 +66,10 @@ def samltoken(fp, stsurl = 'https://ciam-dev-chic.custodix.com/sts/services/STS'
     """ 
     generates the saml auth token from a credentials file 
 
-    :param fp: (Path) file with the credentials (xml file)
-    :param stsurl: (str) url to the STS authority
-    :returns: (byte) enctoken 
+    :param Path fp: (Path) file with the credentials (xml file)
+    :param str stsurl: (str) url to the STS authority
+    :return: enctoken - the encoded token
+    :rtype: byte 
     """
 
     if fp.is_file():
@@ -154,7 +155,8 @@ class VSDConnecter:
 
     
     def _httpResponseCheck(self, response):
-        """check the response of a request call to the resouce. 
+        """
+        check the response of a request call to the resouce. 
         """
         
         try:
@@ -201,7 +203,8 @@ class VSDConnecter:
         """
         request the JWT token from the server using Basic Auth
 
-        :returns token: a authentication token (APIToken) or None
+        :return: token - a authentication token or None
+        :rtype: APIToken or None
         """
 
         token = False
@@ -222,8 +225,9 @@ class VSDConnecter:
     def getAPIObjectType(self, response):
         """create an APIObject depending on the type 
 
-        :param response: (json) object data
-        :returns: (APIObject) object
+        :param json response: object data
+        :return: object
+        :rtype: APIObject
         """
         apiObject = APIObject()
         apiObject.set(obj = response)
@@ -249,8 +253,9 @@ class VSDConnecter:
         """
         check if resource is selfUrl or relative path. a correct full path will be returned 
         
-        :param resource: (str) to the api resource
-        :returns: (str) the full resource path 
+        :param str resource: the api resource path
+        :return: the full resource path 
+        :rtype: str
         """
         res = urlparse(str(resource))
 
@@ -265,8 +270,9 @@ class VSDConnecter:
         """
         generic options request function
 
-        :param resource: (str) resource path
-        :returns: json result or None
+        :param str resource: the api resource path
+        :return: json data result or None
+        :rtype: json or None
         """
 
         self._stayAlive()
@@ -286,11 +292,12 @@ class VSDConnecter:
         """
         generic get request function
 
-        :param resource: (str) resource path
-        :param rpp: (int) results per page to show
-        :param page: (int) page nr to show, starts with 0
-        :param include: (str) option to include more informations
-        :returns: list of objects (json) or None
+        :param str resource: resource path
+        :param int rpp: results per page to show
+        :param int page: page nr to show, starts with 0
+        :param str include: option to include more informations
+        :return: list of objects or None
+        :rtype: json or None
         """
       
         params = dict([('rpp', rpp),('page', page),('include', include)])
@@ -314,7 +321,7 @@ class VSDConnecter:
 
         :param resource: (str) download URL
         :param fp: (Path) filepath 
-        :returns: None or status_code ok (200)
+        :return: None or status_code ok (200)
         """
 
         self._stayAlive()
@@ -333,7 +340,7 @@ class VSDConnecter:
 
         :param obj: object (APIObject)
         :param wp: (Path) workpath, where to store the zip 
-        :returns: None or filename
+        :return: None or filename
         """
         
         self._stayAlive()
@@ -367,7 +374,7 @@ class VSDConnecter:
 
         :param resource: (str) resource path
         :param itemlist: (list) of items
-        :returns: list of items
+        :return: list of items
         """
         res = self.getRequest(resource)
         if res:
@@ -387,7 +394,7 @@ class VSDConnecter:
         extracts the last part of the selfURL, tests if it is a number
 
         :param selfURL: (str) url to the object
-        :returns: either None if not an ID or the object ID (int)
+        :return: either None if not an ID or the object ID (int)
         :raises: ValueError
         """
         selfURL_path = urllib.parse.urlsplit(selfURL).path
@@ -407,7 +414,7 @@ class VSDConnecter:
         """retrieve an object based on the objectID
 
         :param resource: (str) selfUrl of the object or the (int) object ID
-        :returns: the object (APIObject) 
+        :return: the object (APIObject) 
         """
         if isinstance(resource, int):
             resource = 'objects/' + str(resource)
@@ -424,7 +431,7 @@ class VSDConnecter:
         """update an objects information
     
         :param obj: (APIObject) an API Object
-        :returns: (APIObject) the updated object
+        :return: (APIObject) the updated object
         """
 
         res = self.putRequest(obj.selfUrl, data = obj.get())
@@ -440,7 +447,7 @@ class VSDConnecter:
         """retrieve an folder based on the folderID
 
         :param resource: (str) selfUrl of the folder or the (int) folder ID
-        :returns: the folder (APIFolder) 
+        :return: the folder (APIFolder) 
         """
         if isinstance(resource, int):
             resource = 'folders/' + str(resource)
@@ -460,7 +467,7 @@ class VSDConnecter:
 
         :param resource: (str) relative path of the resource or selfUrl
         :param data: (json) data to be added to the resource
-        :returns: the resource object (json)
+        :return: the resource object (json)
         """
 
         self._stayAlive()
@@ -480,7 +487,7 @@ class VSDConnecter:
 
         :param resource: (str) defines the relative path to the api resource
         :param data: (json) data to be added to the object
-        :returns: the updated object (json)
+        :return: the updated object (json)
         """
 
         self._stayAlive()
@@ -500,7 +507,7 @@ class VSDConnecter:
         """get an empty resource 
 
         :param resource: (str) resource path
-        :returns: the resource object (json)
+        :return: the resource object (json)
         """
 
         self._stayAlive()
@@ -519,7 +526,7 @@ class VSDConnecter:
         """ generic delete request
 
         :param resource: (str) resource path
-        :returns: status_code (int)
+        :return: status_code (int)
         """
         try: 
             req = self.s.delete(self.fullUrl(resource))
@@ -542,7 +549,7 @@ class VSDConnecter:
         delete an unvalidated object 
 
         :param obj: (APIObject) to object to delete
-        :returns: status_code
+        :return: status_code
         """
         try: 
             req = self.s.delete(obj.selfUrl)
@@ -561,7 +568,7 @@ class VSDConnecter:
         publisch an unvalidated object 
 
         :param obj: (APIObject) to object to publish
-        :returns: (APIObject) returns the object
+        :return: (APIObject) returns the object
         """
         try: 
             req = self.s.put(obj.selfUrl + '/publish')
@@ -581,7 +588,7 @@ class VSDConnecter:
         :param resouce: (str) resource path
         :param search: (str) term to search for 
         :param mode: (str) search for partial match ('default') or exact match ('exact')
-        :returns: list of folder objects (json)
+        :return: list of folder objects (json)
         """
 
         search = urlparse_quote(search)
@@ -600,8 +607,8 @@ class VSDConnecter:
         push (post) a file to the server
 
         :param filename: (Path) the file to be uploaded
-        :returns: the file object containing the related object selfUrl
-        :returns: file object (APIObject)
+        :return: the file object containing the related object selfUrl
+        :return: file object (APIObject)
         """
         try:
             data = filename.open(mode = 'rb').read()
@@ -644,7 +651,7 @@ class VSDConnecter:
 
         :param fp: (Path) file
         :param chunksize: (int) size in bytes of the chunk parts, default is 4MB
-        :returns: the generated API Object
+        :return: the generated API Object
         """
         parts = math.ceil(fp.stat().st_size/chunksize)
         part = 0
@@ -682,7 +689,7 @@ class VSDConnecter:
         """return a APIFile object
         
         :param resource: (str) resource path
-        :returns: api file object (APIFile) or status code
+        :return: api file object (APIFile) or status code
         """  
         if isinstance(resource, int):
             resource = 'files/{0}'.format(resource)
@@ -702,7 +709,7 @@ class VSDConnecter:
         """return a list of file objects contained in an object
 
         :param obj: (APIObject) object 
-        :returns: list of files(APIFiles)
+        :return: list of files(APIFiles)
         """
         filelist = list()
         for of in obj.files:
@@ -731,7 +738,7 @@ class VSDConnecter:
         :param resource: (str) resource path (eg nextPageUrl) or default groups
         :param rpp: (int) results per page
         :param page: (int) page to display
-        :returns: list of objects (APIObjects) 
+        :return: list of objects (APIObjects) 
         """
 
         objects = list()
@@ -762,7 +769,7 @@ class VSDConnecter:
 
         :param search: (str) term to search for 
         :param mode: (str) search for partial match ('default') or exact match ('exact')
-        :returns: list of folder objects (APIFolders)
+        :return: list of folder objects (APIFolders)
         """   
         search = urlparse_quote(search)
         if mode == 'exact':
@@ -913,10 +920,11 @@ class VSDConnecter:
         """
         Search ontology term in a single ontology resource. Two modes are available to either find the exact term or based on a partial match
 
-        :param search: (str) string to be searched
-        :param oType: (int) ontlogy resouce code, default is FMA (0)
-        :param mode: (str) find exact term (exact) or partial match (default)
-        :returns: a list of ontology (APIOntolgy) objects or a single ontology item (APIOntology)
+        :param str search: string to be searched
+        :param int oType: ontlogy resouce code, default is FMA (0)
+        :param str mode: find exact term (exact) or partial match (default)
+        :returns: a list of ontology objects or a single ontology item 
+        :rtype: APIOntolgy
         """
         search = urlparse_quote(search)
         if mode == 'exact':
@@ -954,7 +962,7 @@ class VSDConnecter:
 
         :param oid: (int) Identifier of the entry
         :param oType: (int) Resource type, available resources can be found using the OPTIONS on /api/ontologies). Default resouce is FMA (0)
-        :returns: ontology term entry (json)
+        :return: ontology term entry (json)
         """
 
         self._stayAlive()
@@ -1058,8 +1066,8 @@ class VSDConnecter:
         :param resource: (str) resource path (eg nextPageUrl) or default groups
         :param rpp: (int) results per page
         :param page: (int) page to display
-        :returns: list of group objects (APIGroup)
-        :returns: pagination object(APIPagination)
+        :return: list of group objects (APIGroup)
+        :return: pagination object(APIPagination)
         """
 
         groups = list()
@@ -1143,7 +1151,7 @@ class VSDConnecter:
         get the list of attaced group rights of an object
 
         :param obj: the object (APIObject)
-        :returns rights: a list of ObjectGroupRights (APIObjectGroupRight)
+        :return rights: a list of ObjectGroupRights (APIObjectGroupRight)
         """
 
         rights = None
@@ -1163,7 +1171,7 @@ class VSDConnecter:
         get the list of attaced user rights of an object
 
         :param obj: the object (APIObject)
-        :returns rights: a list of ObjectUserRights (APIObjectUserRight)
+        :return rights: a list of ObjectUserRights (APIObjectUserRight)
         """
 
         rights = None
@@ -1180,7 +1188,7 @@ class VSDConnecter:
     def postObjectRights(self, obj, group, perms, isuser = False):
         """ DEPRECATED: user postObjectGroupRights or postObjectUserRights! 
         translate a set of permissions and a group into the appropriate format and add it to the object
-
+        .. warning:: DEPRECATED: user postObjectGroupRights or postObjectUserRights! 
         :param obj: (API Object) the object you want to add the permissions to 
         :param group: (APIGroup or APIUser) group object or user object
         :param perms: (list) list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
@@ -1340,7 +1348,7 @@ class VSDConnecter:
 
         :param obj1: (APIBasic) an link object with selfUrl 
         :param obj2: (APIBasic) an link object with selfUrl
-        :returns: the created object-link (json)
+        :return: the created object-link (json)
         """
         link = APIObjectLink()
         link.object1 = dict([('selfUrl', obj1.selfUrl)])
@@ -1378,7 +1386,7 @@ class VSDConnecter:
         :param parent: (APIFolder) the root folder
         :param name: (str) name of the folder which should be created
         :param check: (bool) it we should check if already exist, default = True
-        :returns: (APIFolder) the folder object of the generated folder or the existing folder
+        :return: (APIFolder) the folder object of the generated folder or the existing folder
         """
          
         folder = APIFolder()
@@ -1435,7 +1443,7 @@ class VSDConnecter:
         :param rootfolder: (APIFolder) the root folder
         :param filepath: (Path) file path of the file
         :param parents: (int) number of partent levels to create from file folder 
-        :returns: (APIFolder) the last folder in the tree
+        :return: (APIFolder) the last folder in the tree
         """
          
         fp = filepath.resolve()
@@ -1488,7 +1496,7 @@ class VSDConnecter:
     
         :param target: (APIFolder) the target folder 
         :param obj: (APIObject) the object to copy
-        :returns: updated folder (APIFolder)
+        :return: updated folder (APIFolder)
         """    
         objSelfUrl = dict([('selfUrl',obj.selfUrl)])
         objects = target.containedObjects
@@ -1515,7 +1523,7 @@ class VSDConnecter:
     
         :param target: (APIFolder) the target folder 
         :param obj: (APIObject) the object to remove
-        :returns: updated folder (APIFolder)
+        :return: updated folder (APIFolder)
         """  
 
         objSelfUrl = dict([('selfUrl',obj.selfUrl)])
@@ -1654,6 +1662,8 @@ class APIBasic(object):
 class APIObject(APIBasic):
     """
     API Object
+
+    members:
     """ 
     oKeys = list([
         'id',
