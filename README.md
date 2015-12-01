@@ -2,6 +2,9 @@
 
 This library implements a client for the REST API of the virtualskeletondatabase (www.virtualskeleton.ch). It supports authentication, general queries, and specific requests such as image upload/download, object linking and right management. Examples are provided in the examples directory. Please use 'demo.virtualskeleton.ch' for testing purposes.
 
+## Module documentation
+-[http://sicasfoundation.github.io/vsdConnect/](http://sicasfoundation.github.io/vsdConnect/)
+
 ## What is in this Fork
 - Pyhton 3 (3.4.3)
 - usage of **requests** package instead of urllib2
