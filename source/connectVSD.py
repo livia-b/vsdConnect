@@ -1,11 +1,19 @@
 #!/usr/bin/python
 """
-connectVSD 0.8
-python version: 3 
-@author: Michael Kistler 2015
+=======
+INFOS
+=======
+* connectVSD 0.8
+* python version: 3 
+* @author: Michael Kistler 2015
 
-changed / added auth 
+========
+CHANGES
+========
+- changed / added JwT auth 
 """
+
+
 from __future__ import print_function
 
 import sys
@@ -111,7 +119,7 @@ class JWTAuth(AuthBase):
                
 
 class VSDConnecter:
-    APIURL='https://demo.virtualskeleton.ch/api/'
+    __APIURL='https://demo.virtualskeleton.ch/api/'
 
     def __init__(
         self, 
@@ -389,7 +397,7 @@ class VSDConnecter:
         :param str rource: resource path
         :param list itemlist: list of items
         :return: list of items
-        :rtype: list
+        :rtype: list of APIPagination objects
         """
 
         res = self.getRequest(resource)
@@ -754,8 +762,8 @@ class VSDConnecter:
         return a list of file objects contained in an object
 
         :param APIObject obj: object
-        :return: list of APIFiles
-        :rtype: list
+        :return: list of APIFile
+        :rtype: list of APIFile 
         """
         filelist = list()
         for of in obj.files:
@@ -826,7 +834,7 @@ class VSDConnecter:
         :param str search: term to search for 
         :param str mode: search for partial match ('default') or exact match ('exact')
         :return: list of folder objects APIFolders
-        :rtype: list
+        :rtype: list of APIFolders
         """   
         
         search = urlparse_quote(search)
@@ -875,7 +883,7 @@ class VSDConnecter:
 
         :param APIFolder folder: folder object
         :return folderlist: a list of folder object (APIFolder) contained in the folder
-        :rtype: list
+        :rtype: list of APIFolder
         """
 
         folderlist = list()
@@ -897,7 +905,7 @@ class VSDConnecter:
 
         :param APIFolder folder: folder object
         :return objlist: a list of objects (APIFObject) contained in the folder
-        :rtype:  list
+        :rtype:  list of APIObject
         """
 
         objlist = list()
@@ -941,7 +949,7 @@ class VSDConnecter:
         :param bool recursive:  travel the folder structure recursively or not (default)
         :param str mode: what to return: only objects (o), only folders (f) or default (d) folders and objects
         :return content: dictionary with folders (APIFolder) and object (APIObjects)
-        :rtype: dict
+        :rtype: dict of APIFolder and APIObject
         """
          
         objectmode = False
@@ -1081,7 +1089,7 @@ class VSDConnecter:
 
         
         :return: list of available license objects
-        :rtype: list
+        :rtype: list of APILicense
         """
 
         res = self.getRequest('licenses')
@@ -1119,7 +1127,7 @@ class VSDConnecter:
         """ retrieve a list of the available base object rights (APIObjectRight) 
 
         :return: list of object rights
-        :rtype: list
+        :rtype: list of APIObjectRight
         """
         
         res = self.getRequest('object_rights')
@@ -1250,8 +1258,8 @@ class VSDConnecter:
         get the list of attaced group rights of an object
 
         :param APIObject obj: the object 
-        :return rights: a list of ObjectGroupRights (APIObjectGroupRight)
-        :rtype: list
+        :return rights: a list of ObjectGroupRights
+        :rtype: list of APIObjectGroupRight
         """
 
         rights = None
@@ -1271,8 +1279,8 @@ class VSDConnecter:
         get the list of attaced user rights of an object
 
         :param APIObject obj: the object 
-        :return: a list of ObjectUserRights (APIObjectUserRight)
-        :rtype: list
+        :return: a list of ObjectUserRights
+        :rtype: list APIObjectUserRight
         """
 
         rights = None
@@ -1287,11 +1295,11 @@ class VSDConnecter:
         return rights
 
     def postObjectRights(self, obj, group, perms, isuser = False):
-        """ DEPRECATED: user postObjectGroupRights or postObjectUserRights! 
+        """
         translate a set of permissions and a group into the appropriate format and add it to the object
         
 
-        .. warning:: DEPRECATED: user postObjectGroupRights or postObjectUserRights! 
+        .. warning:: DEPRECATED: use postObjectGroupRights or postObjectUserRights! 
 
 
         :param APIObject obj: () the object you want to add the permissions to 
@@ -1383,7 +1391,7 @@ class VSDConnecter:
         retrieve a list of modalities objects (APIModality)
 
         :return: list of available modalities
-        :rtype: list
+        :rtype: list of APIModality
         """
 
         modalities = list()
@@ -1752,7 +1760,12 @@ class VSDConnecter:
 
         
 class APIBasic(object):
-    """docstring for APIBasic"""
+    """
+    APIBasic
+
+    :attributes: 
+        * selfUrl
+    """
 
     oKeys = list([
        'selfUrl'
@@ -1763,7 +1776,11 @@ class APIBasic(object):
                 setattr(self, v, None)
         
     def set(self, obj = None):
-        """ sets class variable for each key in the object to the keyname and its value"""
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIBasic obj: A APIBasic object
+        """
         if  obj:
             for v in self.oKeys:
                 if v in obj: 
@@ -1784,8 +1801,27 @@ class APIObject(APIBasic):
     """
     API Object
 
-    members: oKeys are the available attributes of the class
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * type
+        * description
+        * objectGroupRights
+        * objectUserRights
+        * objectPreviews
+        * createdDate
+        * modality
+        * ontologyItems
+        * ontologyItemRelations
+        * ontologyCount
+        * license
+        * files
+        * linkedObjects
+        * linkedObjectRelations
+        * downloadUrl
     """ 
+
     oKeys = list([
         'id',
         'name',
@@ -1806,13 +1842,18 @@ class APIObject(APIBasic):
         'downloadUrl'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self, ):
         super(APIObject, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObject obj: A APIObject object
+        """
         super(APIObject, self).set(obj = obj)
 
     def get(self):
@@ -1825,20 +1866,49 @@ class APIObject(APIBasic):
 
 
 class APIObjectRaw(APIObject):
-    """docstring for APIObjectRaw"""
+    """
+    APIObjectRaw (Serie, Raw Images)
+
+     :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * type
+        * description
+        * objectGroupRights
+        * objectUserRights
+        * objectPreviews
+        * createdDate
+        * modality
+        * ontologyItems
+        * ontologyItemRelations
+        * ontologyCount
+        * license
+        * files
+        * linkedObjects
+        * linkedObjectRelations
+        * downloadUrl
+        * sliceThickness
+        * spaceBetweenSlices
+        * kilovoltPeak
+    """
     oKeys = list([
         'sliceThickness',
         'spaceBetweenSlices',
         'kilovoltPeak'
         ])
 
-    for i in APIObject.oKeys:
-        oKeys.append(i)
+    for __i in APIObject.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObject, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectRaw obj: a APIObjectRaw object
+        """
         super(APIObject, self).set(obj = obj)
 
     def get(self):
@@ -1850,20 +1920,50 @@ class APIObjectRaw(APIObject):
         super(APIObject, self).show()
 
 class APIObjectSeg(APIObject):
-    """docstring for APIObjectSeg"""
+    """
+    APIObjectSeg (Segmentation objects)
+    
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * type
+        * description
+        * objectGroupRights
+        * objectUserRights
+        * objectPreviews
+        * createdDate
+        * modality
+        * ontologyItems
+        * ontologyItemRelations
+        * ontologyCount
+        * license
+        * files
+        * linkedObjects
+        * linkedObjectRelations
+        * downloadUrl
+        * SegmentationMethod
+        * SegmentationMethodDescription
+
+    """
     oKeys = list([
         'SegmentationMethod',
         'SegmentationMethodDescription'
         ])
     
 
-    for i in APIObject.oKeys:
-        oKeys.append(i)
+    for __i in APIObject.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObject, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectSeg obj: A APIObjectSeg object
+        """
         super(APIObject, self).set(obj = obj)
 
     def get(self):
@@ -1876,16 +1976,44 @@ class APIObjectSeg(APIObject):
 
 
 class APIObjectSm(APIObject):
-    """docstring for APIObjectSm"""
+    """
+    APIObjectSm (Statistical Models)
+
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * type
+        * description
+        * objectGroupRights
+        * objectUserRights
+        * objectPreviews
+        * createdDate
+        * modality
+        * ontologyItems
+        * ontologyItemRelations
+        * ontologyCount
+        * license
+        * files
+        * linkedObjects
+        * linkedObjectRelations
+        * downloadUrl
+    """
+
     oKeys = list()
 
-    for i in APIObject.oKeys:
-        oKeys.append(i)
+    for __i in APIObject.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObject, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectSm obj: A APIObjectSm object
+        """
         super(APIObject, self).set(obj = obj)
 
     def get(self):
@@ -1897,16 +2025,44 @@ class APIObjectSm(APIObject):
         super(APIObject, self).show()
 
 class APIObjectCtDef(APIObject):
-    """docstring for APIObjectCtDef"""
+    """
+    APIObjectCtDef (Clinical Trial Definition)
+    
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * type
+        * description
+        * objectGroupRights
+        * objectUserRights
+        * objectPreviews
+        * createdDate
+        * modality
+        * ontologyItems
+        * ontologyItemRelations
+        * ontologyCount
+        * license
+        * files
+        * linkedObjects
+        * linkedObjectRelations
+        * downloadUrl
+    """
+
     oKeys = list()
 
-    for i in APIObject.oKeys:
-        oKeys.append(i)
+    for __i in APIObject.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObject, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectCtDef obj: A APIObjectCtDef object
+        """
         super(APIObject, self).set(obj = obj)
 
     def get(self):
@@ -1918,16 +2074,45 @@ class APIObjectCtDef(APIObject):
         super(APIObject, self).show()
 
 class APIObjectCtData(APIObject):
-    """docstring for APIObjectCtData"""
+    """
+    APIObjectCtData (Clinical Trial Data)
+
+
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * type
+        * description
+        * objectGroupRights
+        * objectUserRights
+        * objectPreviews
+        * createdDate
+        * modality
+        * ontologyItems
+        * ontologyItemRelations
+        * ontologyCount
+        * license
+        * files
+        * linkedObjects
+        * linkedObjectRelations
+        * downloadUrl
+
+    """
     oKeys = list()
 
-    for i in APIObject.oKeys:
-        oKeys.append(i)
+    for __i in APIObject.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObject, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectCtData obj: A APIObjectCtData object
+        """
         super(APIObject, self).set(obj = obj)
 
     def get(self):
@@ -1940,20 +2125,51 @@ class APIObjectCtData(APIObject):
 
 
 class APIObjectSurfModel(APIObject):
-    """docstring for APIObjectSurfModel"""
+    """
+    APIObjectSurfModel (Surface Model)
+
+
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * type
+        * description
+        * objectGroupRights
+        * objectUserRights
+        * objectPreviews
+        * createdDate
+        * modality
+        * ontologyItems
+        * ontologyItemRelations
+        * ontologyCount
+        * license
+        * files
+        * linkedObjects
+        * linkedObjectRelations
+        * downloadUrl
+        * Facet
+        * Vertex
+
+    """
     oKeys = list([
         'Facet',
         'Vertex'
         ])
     
 
-    for i in APIObject.oKeys:
-        oKeys.append(i)
+    for __i in APIObject.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObject, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectSurfModel obj: A APIObjectSurfModel object
+        """
         super(APIObject, self).set(obj = obj)
 
     def get(self):
@@ -1968,6 +2184,17 @@ class APIObjectSurfModel(APIObject):
 class APIFolder(APIBasic):
     """
     Folder API Object
+
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * level
+        * parentFolder
+        * childFolders
+        * folderGroupRights
+        * folderUserRights
+        * containedObjects
     """
     oKeys = list([
         'id',
@@ -1980,13 +2207,18 @@ class APIFolder(APIBasic):
         'containedObjects'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIFolder, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIFolder obj: A APIFolder object
+        """
         super(APIFolder, self).set(obj = obj)
 
     def get(self):
@@ -2000,6 +2232,13 @@ class APIFolder(APIBasic):
 class APIOntology(APIBasic):
     """
     API class for ontology entries
+
+    :attributes: 
+        * selfUrl
+        * id
+        * term
+        * type
+
     """
     oKeys = list([
         'id',
@@ -2007,13 +2246,18 @@ class APIOntology(APIBasic):
         'type',
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIOntology, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIOntology obj: A APIOntology object
+        """
         super(APIOntology, self).set(obj = obj)
 
     def get(self):
@@ -2027,6 +2271,16 @@ class APIOntology(APIBasic):
 class APIObjectOntology(APIBasic):
     """
     API class for object-ontology entries
+
+
+    :attributes: 
+        * selfUrl
+        * id
+        * type
+        * object
+        * ontologyItem
+        * position
+
     """
     oKeys = list([
         'id',
@@ -2036,13 +2290,18 @@ class APIObjectOntology(APIBasic):
         'position'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObjectOntology, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectOntology obj: A APIObjectOntology object
+        """
         super(APIObjectOntology, self).set(obj = obj)
 
     def get(self):
@@ -2056,6 +2315,17 @@ class APIObjectOntology(APIBasic):
 class APIFile(APIBasic):
     """
     API class for files
+
+    :attributes: 
+        * selfUrl
+        * id
+        * createdDate
+        * downloadUrl
+        * originalFileName
+        * anonymizedFileHashCode
+        * size
+        * fileHashCode
+
     """
     oKeys = list([
         'id',
@@ -2067,13 +2337,18 @@ class APIFile(APIBasic):
         'fileHashCode'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIFile, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIFile obj: A APIFile object
+        """
         super(APIFile, self).set(obj = obj)
 
     def get(self):
@@ -2087,6 +2362,13 @@ class APIFile(APIBasic):
 class APILicense(APIBasic):
     """
     API class for licenses
+
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * description
+
     """
     oKeys = list([
         'id',
@@ -2094,13 +2376,18 @@ class APILicense(APIBasic):
         'name',
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APILicense, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APILicense obj: A APILicense object
+        """
         super(APILicense, self).set(obj = obj)
 
     def get(self):
@@ -2114,6 +2401,13 @@ class APILicense(APIBasic):
 class APIObjectRight(APIBasic):
     """
     API class for object rights
+
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * description
+
     """
     oKeys = list([
         'id',
@@ -2121,13 +2415,18 @@ class APIObjectRight(APIBasic):
         'name',
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObjectRight, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectRight obj: A APIObjectRight object
+        """
         super(APIObjectRight, self).set(obj = obj)
 
     def get(self):
@@ -2141,6 +2440,14 @@ class APIObjectRight(APIBasic):
 class APIObjectLink(APIBasic):
     """
     API class for object links
+
+    :attributes: 
+        * selfUrl
+        * id
+        * description
+        * object1
+        * object2
+
     """
     oKeys = list([
         'id',
@@ -2149,13 +2456,18 @@ class APIObjectLink(APIBasic):
         'object2',
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObjectLink, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectLink obj: A APIObjectLink object
+        """
         super(APIObjectLink, self).set(obj = obj)
 
     def get(self):
@@ -2169,6 +2481,13 @@ class APIObjectLink(APIBasic):
 class APIModality(APIBasic):
     """
     API class for modalities
+
+    :attributes: 
+        * selfUrl
+        * id
+        * name  
+        * description
+
     """
     oKeys = list([
         'id',
@@ -2176,13 +2495,18 @@ class APIModality(APIBasic):
         'name'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIModality, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIModality obj: A APIModality object
+        """
         super(APIModality, self).set(obj = obj)
 
     def get(self):
@@ -2196,6 +2520,14 @@ class APIModality(APIBasic):
 class APIObjectGroupRight(APIBasic):
     """
     API class for object group rights
+
+    :attributes: 
+        * selfUrl
+        * id
+        * relatedObject
+        * relatedRights
+        * relatedGroup
+
     """
     oKeys = list([
         'id',
@@ -2204,13 +2536,18 @@ class APIObjectGroupRight(APIBasic):
         'relatedGroup'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObjectGroupRight, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectGroupRight obj: A APIObjectGroupRight object
+        """
         super(APIObjectGroupRight, self).set(obj = obj)
 
     def get(self):
@@ -2224,6 +2561,15 @@ class APIObjectGroupRight(APIBasic):
 class APIObjectUserRight(APIBasic):
     """
     API class for object user rights
+
+
+    :attributes: 
+        * selfUrl
+        * id
+        * relatedObject
+        * relatedRights
+        * relatedUser
+        
     """
     oKeys = list([
         'id',
@@ -2232,13 +2578,18 @@ class APIObjectUserRight(APIBasic):
         'relatedUser'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIObjectUserRight, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIObjectUserRight obj: A APIObjectUserRight object
+        """
         super(APIObjectUserRight, self).set(obj = obj)
 
     def get(self):
@@ -2252,6 +2603,14 @@ class APIObjectUserRight(APIBasic):
 class APIGroup(APIBasic):
     """
     API class for groups
+
+
+    :attributes: 
+        * selfUrl
+        * id
+        * Chief
+        * name
+        
     """
     oKeys = list([
         'id',
@@ -2259,13 +2618,18 @@ class APIGroup(APIBasic):
         'name'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIGroup, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIGroup obj: A APIGroup object
+        """
         super(APIGroup, self).set(obj = obj)
 
     def get(self):
@@ -2279,19 +2643,30 @@ class APIGroup(APIBasic):
 class APIUser(APIBasic):
     """
     API class for users
+
+    :attributes: 
+        * selfUrl
+        * id
+        * username
+        
     """
     oKeys = list([
         'id',
         'username'
         ])
 
-    for i in APIBasic.oKeys:
-        oKeys.append(i)
+    for __i in APIBasic.oKeys:
+        oKeys.append(__i)
 
     def __init__(self):
         super(APIUser, self).__init__(self.oKeys) 
 
     def set(self, obj = None):
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIUser obj: A APIUser object
+        """
         super(APIUser, self).set(obj = obj)
 
     def get(self):
@@ -2305,6 +2680,14 @@ class APIUser(APIBasic):
 class APIPagination(object):
     """
     API class for Pagination results
+
+
+    :attributes: 
+        * totalCount
+        * pagination
+        * items
+        * nextPageUrl
+        
     """
     oKeys = list([
         'totalCount',
@@ -2318,7 +2701,11 @@ class APIPagination(object):
                 setattr(self, v, None)
         
     def set(self, obj = None):
-        """ sets class variable for each key in the object to the keyname and its value"""
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIPagination obj: A APIPagination object
+        """
         if  obj:
             for v in self.oKeys:
                 if v in obj: 
@@ -2338,6 +2725,11 @@ class APIPagination(object):
 class APIToken(object):
     """
     API class to work with the tokens
+
+    :attributes:
+        * tokenType
+        * tokenValue
+        
     """
     oKeys = list([
         'tokenType',
@@ -2350,7 +2742,11 @@ class APIToken(object):
 
         
     def set(self, obj = None):
-        """ sets class variable for each key in the object to the keyname and its value"""
+        """ 
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIToken obj: A APIToken object
+        """
         if  obj:
             for v in self.oKeys:
                 if v in obj: 
