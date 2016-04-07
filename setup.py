@@ -27,7 +27,8 @@ class sdist_git(sdist):
         return repo.head.commit.hexsha[:7]
 
 
-install_requires = ['requests', 'jwt']
+install_requires = ['requests',
+                    'pyjwt>1.3'] #http://stackoverflow.com/a/33065553 http://stackoverflow.com/a/34388281
 major_python_version, minor_python_version, _, _, _ = sys.version_info
 if major_python_version < 3 or (major_python_version == 3 and minor_python_version < 4):
     install_requires.append('pathlib')
