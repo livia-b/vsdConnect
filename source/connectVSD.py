@@ -25,18 +25,14 @@ import hashlib
 from datetime import datetime 
 from calendar import timegm
 
-if sys.version_info >= (3, 0):
-    PYTHON3 = True
-else:
-    PYTHON3 = False
-
 import os
 import urllib
 import jwt
-if PYTHON3:
+
+try:
     from urllib.parse import urlparse
     from urllib.parse import quote
-else:
+except: #python3
     from urlparse import urlparse
     from urllib import quote
 import json
@@ -58,9 +54,18 @@ except:
     import xml.etree.ElementTree as ET
 
 
+def checkDependencies():
+    try:
+        jwt.decode
+    except:
+        logger.error("try:\n pip uninstall jwt\npip install pyjwt", exc_info=True)
 
+
+checkDependencies()
 
 requests.packages.urllib3.disable_warnings()
+
+logger = logging.getLogger(__name__)
 
 def statusDescription(res):
     """
@@ -131,7 +136,7 @@ class JWTAuth(AuthBase):
         r.headers['Authorization'] = 'Bearer ' + self.enctoken
         return r
 
-               
+
 
 class VSDConnecter:
     __APIURL='https://demo.virtualskeleton.ch/api/'
@@ -156,10 +161,7 @@ class VSDConnecter:
         if version:
             self.version = str(version) + '/'
 
-
-
         if authtype == 'basic':
-            logging.debug("authtype basic")
             self.username = username
             self.password = password
             self.s.auth = (self.username, self.password)
@@ -351,7 +353,7 @@ class VSDConnecter:
         self._stayAlive()
         try:
 
-            logging.debug("get(%s, params = %s)" %(self.fullUrl(resource), params))
+            logger.debug("getRequest get(%s, params = %s)" %(self.fullUrl(resource), params))
 
             res = self.s.get(self.fullUrl(resource), params = params)
 
@@ -359,7 +361,7 @@ class VSDConnecter:
                 if res.status_code == requests.codes.ok:
                     return res.json()
                 else: 
-                    logging.warning("getRequest %s failed: %s [%s]" %(resource, res, statusDescription(res.status_code) ))
+                    logger.warning("getRequest %s failed: %s [%s]" %(resource, res, statusDescription(res.status_code) ))
                     return None
         except requests.exceptions.RequestException as err:
             print('request failed:', err)
@@ -480,7 +482,6 @@ class VSDConnecter:
             resource = 'objects/' + str(resource)
 
         res = self.getRequest(resource)
-        logging.debug("getObject %s : %s" %(resource, res))
         if res:
             obj = self.getAPIObjectType(res)
             obj.set(obj = res)
@@ -541,7 +542,7 @@ class VSDConnecter:
             req = self.s.post(self.fullUrl(resource), json = data)
             print('status code:', req.status_code)
             #if req.status_code == requests.codes.created:
-                return req.json()
+            return req.json()
         except requests.exceptions.RequestException as err:
             print('request failed:',err)
             return None
@@ -581,7 +582,7 @@ class VSDConnecter:
         self._stayAlive()
 
         req = self.s.post(self.fullUrl(resource))
-        logging.debug(req)
+        logger.debug("result of post request %s: %s" %(resource,req))
         return req.json()
 
     def putRequestSimple(self, resource):
@@ -596,6 +597,8 @@ class VSDConnecter:
         self._stayAlive()
 
         req = self.s.put(self.fullUrl(resource))
+        logger.debug("result of put request %s: %s" %(resource,req))
+
         return req.json()
 
     def delRequest(self, resource):
@@ -746,7 +749,7 @@ class VSDConnecter:
 
         try:
             if isinstance(filename,str):
-                logging.warning('Converting string filename to path object')
+                logger.warning('Converting string filename to path object')
                 filename = Path(filename)
             data = filename.open(mode = 'rb').read()
             ##workaround for file without file extensions
@@ -754,7 +757,7 @@ class VSDConnecter:
                 filename = filename.with_suffix('.dcm')
             files  = { 'file' : (str(filename.name), data)}
         except:
-            logging.error("opening file %s failed, aborting" %filename, exc_info= True)
+            logger.error("opening file %s failed, aborting" %filename, exc_info= True)
             return
 
         res = self.s.post(self.url + 'upload', files = files)
@@ -764,7 +767,7 @@ class VSDConnecter:
             result = res.json() # {file: {selfUrl: ...}, relatedObject: {selfUrl}}
             res_file = {'selfUrl': result['file']['selfUrl']} # 'objects': [result['relatedObject']['selfUrl']] it's the second last in case of segmentations
             if res.status_code == requests.codes.ok:
-                logging.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
+                logger.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
             #obj = APIFile()
             obj = self.getAPIObjectType(res_file)
             obj.set(obj = res_file)
@@ -817,7 +820,7 @@ class VSDConnecter:
                         attemptsLeft = 0
                     else:
                         err = True
-                        logging.warning("Error uploading file chunks: %s [attempts left %d]" %(statusDescription(res.status_code), attemptsLeft))
+                        logger.warning("Error uploading file chunks: %s [attempts left %d]" %(statusDescription(res.status_code), attemptsLeft))
             if not err:
                 res = None
                 resource = 'chunked_upload/commit?filename={0}'.format(fp.name)
@@ -1625,27 +1628,27 @@ class VSDConnecter:
         exists = False
 
         if check:
-        if parent.childFolders:
-            for child in parent.childFolders:
+            if parent.childFolders:
+                for child in parent.childFolders:
                     basic = APIBasic()
                     basic.set(obj = child)
                     fold = self.getFolder(basic.selfUrl)
                     if fold is not None:
-                if fold.name == name:
-                            print('folder {0} already exists, id: {1}'.format(name, fold.id))
-                    exists = True
-                    else:
-                        print('unexpected error, folder exists but cannot be retrieved')
+                    # if fold.name == name:
+                        print('folder {0} already exists, id: {1}'.format(name, fold.id))
                         exists = True
+                    else:
+                            print('unexpected error, folder exists but cannot be retrieved')
+                            exists = True
 
-        if not exists:
-            res = self.postRequest('folders', data = folder.get())
-            if res is not None:
-            folder.set(obj = res)
-            print('folder {0} created, has id {1}'.format(name, folder.id))
-            return folder
+            if not exists:
+                res = self.postRequest('folders', data = folder.get())
+                if res is not None:
+                    folder.set(obj = res)
+                    print('folder {0} created, has id {1}'.format(name, folder.id))
+                return folder
         else:
-            return fold
+            return folder
 
     def deleteFolder(self, folder, recursive = False):
         """remove a folder (APIFolder)
@@ -1741,14 +1744,13 @@ class VSDConnecter:
             objects.append(objSelfUrl)
             target.containedObjects = objects
             res = self.putRequest('folders', data = target.get())
-
-            if not isinstance(res, int):
+            if self._httpResponseCheck(res):
+            #if not isinstance(res, int):
                 target = APIFolder()
                 target.set(obj = res)
                 return target
             else:
-                logging.warning(res)
-                return res
+                return None
         else:
             return target
 
