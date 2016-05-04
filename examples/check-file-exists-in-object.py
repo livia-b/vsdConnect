@@ -14,7 +14,7 @@ CHANGES
 
 """
 
-import connectVSD
+from vsdConnect import connectVSD
 import os
 from pathlib import Path, PurePath, WindowsPath
 
