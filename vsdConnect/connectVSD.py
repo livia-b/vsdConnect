@@ -410,6 +410,20 @@ class VSDConnecter:
         else:
             print('nothing to delete, no links available')
 
+    def getPaginated(self, resource):
+        """ 
+        get paginated object
+        """
+        res = self.getRequest(resource)
+        if res:
+            page = APIPagination()
+            page.set(obj = res)
+
+        else:
+            page = None
+
+        return page
+
     def getAllPaginated(self, resource, itemlist = list()):
         """
         returns all items as list
@@ -3276,7 +3290,96 @@ class APIPagination(object):
         """prints the json to the console, nicely printed"""
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
+    def items(self, otype = Plain):
+        """ return the items as list of correct APIObjects objects
+        
+        :param str otpye: the type of object to return
+        :returns: list of API objects
+        :rtpye: list
 
+        :available object types:
+        * RawImage
+        * SegementationImage
+        * ClinicalStudyData
+        * ClinicalStudyDefinition
+        * GenomicPlatform
+        * GenomicSample
+        * GenomicSeries
+        * Plain
+        * PlainSubject
+        * StatisticalModel
+        * Study
+        * Subject
+        * SurfaceModel
+        * 
+        """
+
+        for item in self.items:
+            if otype == 'RawImage':
+            obj = APIObjectRaw()
+        elif otype == 'SegmentationImage':
+            obj = APIObjectSeg()
+        elif otype == 'StatisticalModel':
+            obj = APIObjectSm()
+        elif otype == 'ClinicalStudyDefinition':
+            obj = APIObjectCtDef()
+        elif otype == 'ClinicalStudyData':
+            obj = APIObjectCtData()
+        elif otype == 'SurfaceModel':
+            obj = APIObjectSurfModel()
+        elif otype == 'GenomicPlatform':
+            obj = APIObjectGenPlatform()
+        elif otype == 'GenomicSample':
+            obj = APIObjectGenSample()
+        elif otype == 'GenomicSeries':
+            obj = APIObjectGenSeries()
+        elif otype == 'Study':
+            obj = APIObjectStudy()
+        elif otype == 'Subject':
+            obj = APIObjectSubject()
+        elif otype == 'Plain':
+            obj = APIObject()
+        elif otype == 'PlainSubject':
+            obj = APIObject()
+        else:
+            obj = APIObject()
+        return obj
+
+    def getPage(self, apisession, resource):
+        """return the result for a specific page nr 
+
+        :param VSDConnecter apisession: the authenticate api session
+        :param str resource: page to return as selfUrl
+        :return: list of items
+        :rtype: list()
+        """
+
+        res = apisession.getRequest(resource)
+
+        if res:
+            print('todo')
+
+    def all(self, apisession, itemlist = list()):
+        """
+        returns all items as list
+
+        :param VSDConnecter apisession: the authenticate api session
+        :param list itemlist: list of items
+        :return: list of all items
+        :rtype: list 
+        """
+
+        for item in self.items:
+            itemlist.append(item)
+        
+        if  self.nextPageUrl:
+
+                return self.all(self.nextPageUrl, itemlist = itemlist)
+            else:
+                return itemlist
+        else:
+            return itemlist
+        
 ##
 ## View Models
 ##
