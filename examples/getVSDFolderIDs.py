@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import connectVSD
+from vsdConnect import connectVSD
 import sys
 import argparse
 

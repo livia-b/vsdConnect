@@ -24,13 +24,17 @@ This library implements a client for the REST API of the virtualskeletondatabase
 * Version: 0.2
 
 ### How do I get set up? ###
-1. install dependencies    
-    
-    pip install requests
-    pip install PyJWT
+1. clone the repo
 
-2. get the code and 
-3. Just add the source directory to your PYTHONPATH
+    git clone https://github.com/SICASFoundation/vsdConnect
+
+2. Install the package with dependencies
+
+    pip install vsdConnect
+
+    or, if you want to edit the source:
+
+    pip install --editable vsdConnect
 
 ### Contribution guidelines ###
 
@@ -52,9 +56,9 @@ This library implements a client for the REST API of the virtualskeletondatabase
 
 ## Get Started
 
-import connectVSD
+from vsdConnect import connectVSD
 
-api = connectVSD.connectVSD()
+api = connectVSD.VSDConnecter()
 obj = api.getObject(21)
 print(obj.selfUrl, obj.name)
 

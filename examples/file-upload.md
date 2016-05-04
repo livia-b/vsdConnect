@@ -5,7 +5,7 @@ Chunk upload can be used on all files. Howevery, the limit for the standard uplo
 1.Import libs
 
     from pathlib import Path, PurePath, WindowsPath
-    import connectVSD
+    from vsdConnect import connectVSD
 
 2.connect to demo, or use username and password and url parameters
 
