@@ -3290,7 +3290,7 @@ class APIPagination(object):
         """prints the json to the console, nicely printed"""
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
-    def items(self, otype = Plain):
+    def items(self, otype = 'Plain'):
         """ return the items as list of correct APIObjects objects
         
         :param str otpye: the type of object to return
@@ -3316,33 +3316,33 @@ class APIPagination(object):
 
         for item in self.items:
             if otype == 'RawImage':
-            obj = APIObjectRaw()
-        elif otype == 'SegmentationImage':
-            obj = APIObjectSeg()
-        elif otype == 'StatisticalModel':
-            obj = APIObjectSm()
-        elif otype == 'ClinicalStudyDefinition':
-            obj = APIObjectCtDef()
-        elif otype == 'ClinicalStudyData':
-            obj = APIObjectCtData()
-        elif otype == 'SurfaceModel':
-            obj = APIObjectSurfModel()
-        elif otype == 'GenomicPlatform':
-            obj = APIObjectGenPlatform()
-        elif otype == 'GenomicSample':
-            obj = APIObjectGenSample()
-        elif otype == 'GenomicSeries':
-            obj = APIObjectGenSeries()
-        elif otype == 'Study':
-            obj = APIObjectStudy()
-        elif otype == 'Subject':
-            obj = APIObjectSubject()
-        elif otype == 'Plain':
-            obj = APIObject()
-        elif otype == 'PlainSubject':
-            obj = APIObject()
-        else:
-            obj = APIObject()
+                obj = APIObjectRaw()
+            elif otype == 'SegmentationImage':
+                obj = APIObjectSeg()
+            elif otype == 'StatisticalModel':
+                obj = APIObjectSm()
+            elif otype == 'ClinicalStudyDefinition':
+                obj = APIObjectCtDef()
+            elif otype == 'ClinicalStudyData':
+                obj = APIObjectCtData()
+            elif otype == 'SurfaceModel':
+                obj = APIObjectSurfModel()
+            elif otype == 'GenomicPlatform':
+                obj = APIObjectGenPlatform()
+            elif otype == 'GenomicSample':
+                obj = APIObjectGenSample()
+            elif otype == 'GenomicSeries':
+                obj = APIObjectGenSeries()
+            elif otype == 'Study':
+                obj = APIObjectStudy()
+            elif otype == 'Subject':
+                obj = APIObjectSubject()
+            elif otype == 'Plain':
+                obj = APIObject()
+            elif otype == 'PlainSubject':
+                obj = APIObject()
+            else:
+                obj = APIObject()
         return obj
 
     def getPage(self, apisession, resource):
@@ -3374,9 +3374,8 @@ class APIPagination(object):
         
         if  self.nextPageUrl:
 
-                return self.all(self.nextPageUrl, itemlist = itemlist)
-            else:
-                return itemlist
+            return self.all(self.nextPageUrl, itemlist = itemlist)
+
         else:
             return itemlist
         
