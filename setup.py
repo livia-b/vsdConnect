@@ -29,7 +29,9 @@ class sdist_git(sdist):
 
 install_requires = [
                     'requests',
-                    'pyjwt>1.3']
+                    'pyjwt>1.3',
+                    'jsonmodels',
+                    'six']
 major_python_version, minor_python_version, _, _, _ = sys.version_info
 if major_python_version < 3 or (major_python_version == 3 and minor_python_version < 4):
     install_requires.append('pathlib')
