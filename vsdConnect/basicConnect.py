@@ -61,22 +61,42 @@ class basicVSDConnect(object):
             for chunk in res.iter_content(1024):
                 f.write(chunk)
 
+    def fullUrl(self, resource):
+        """
+        check if resource is selfUrl or relative path. a correct full path will be returned
+
+        :param str resource: the api resource path
+        :return: the full resource path
+        :rtype: str
+        """
+        res = urlparse(str(resource))
+
+        if res.scheme == 'https':
+            return resource
+        else:
+            return self.url + resource
 
     def parseResource(self, resource, validate = True):
+        """
+        automatically use correct model and download data from server if necessary (typically if id is missing)
+        :param resource: can be a jsonmodel, a dict, a full or partial url
+        :param validate:
+        :return: jsonmodel
+        """
 
+        #parse resource into selfUrl and dict(or json model)
         if isinstance(resource, APIBasic):
             selfUrl = resource.selfUrl
             if not validate:
                 return resource
         else:
             if isinstance(resource, string_types ):
-                selfUrl = resource
-                if not selfUrl.startswith(self.baseUrl):
-                    selfUrl = self.baseUrl + resource
+                selfUrl = self.fullUrl(resource)
                 resource = {'selfUrl' : selfUrl}
             else:
                 selfUrl = resource['selfUrl']
 
+        #find correct model type
         oType, oId = selfUrl.split(self.baseUrl)[-1].split('/')
         resourceTypes = {
             'files': APIFile,
@@ -93,13 +113,14 @@ class basicVSDConnect(object):
             elif oType == 'folders':
                 modelType = FolderPagination
 
+        #cast into json model
         model = modelType(**resource)
 
         if validate :
             try:
                 model.validate()
             except Exception as e:
-                #validation didn't pass because I still need to download the object
+                #validation didn't pass (missing id) because I still need to download the object
                 logging.info("Download %s into %s" %(resource['selfUrl'], modelType))
                 objJson = self._get(resource['selfUrl'])
                 pprint(objJson)
@@ -107,8 +128,15 @@ class basicVSDConnect(object):
                 model.validate()
         return model
 
-
     def _requestsAttempts(self, method, url, *args, **kwargs):
+        """
+        generic wrapper around request library with multiple attempts
+        :param method: string of the method to call "get", "put"
+        :param url: full  url
+        :param args: args for request call
+        :param kwargs: kwargs for request call
+        :return: request json (raise if error after self.maxAttempts)
+        """
         for i in range(self.maxAttempts):
             res = getattr(self.session, method)(url, *args, **kwargs)
             try:
@@ -251,59 +279,6 @@ class basicVSDConnect(object):
     def download(self, obj, folder = '.'):
         return self._download(obj['downloadUrl'],
                               os.path.join(folder, obj['name'] + '.zip' ))
-
-
-
-    #######################################
-    # common actions
-    #######################################
-
-    def addLink(self, obj1url, obj2url):
-        """ add an object link
-        :param APIBasic obj1: a linked object with selfUrl
-        :param APIBasic obj2: a linked object with selfUrl
-        :return: the created object-link
-        :rtype: json
-        """
-
-        link = {
-            'object1' : {'selfUrl': self.fullUrl(obj1url)},
-            'object2' : {'selfUrl': self.fullUrl(obj1url)}
-        }
-        return self.postRequest('object-links', data = link)
-
-
-    def removeLinks(self, resource):
-        """
-        removes all related item from an object
-        :param str resource: resouce path url
-        :return: True if successful or False if failed
-        :rtype: bool
-        """
-
-        obj = self.getObject(resource)
-        links = obj.get('objlinkedObjectRelations', [])
-        logger.debug("object %s has %d links" %(resource, len(links)))
-        for link in links:
-            self.delRequest(link["selfUrl"])
-
-
-    def publish(self, objectUrl):
-        return self.post(objectUrl + '/publish')
-
-    def addLink(self,obj1,obj2 , exclusive=True):
-        # rawUrl = 'https://www.virtualskeleton.ch/api/objects/%s' %data[i][-2]
-        #     #print c.session.put(rawUrl+'/publish')
-        # segUrl = 'https://www.virtualskeleton.ch/api/objects/%s' %data[i+1][-2]
-        # #print c.session.put(segUrl + '/publish')
-        # rawObj, segObj = c.getObjects([data[i][-2], data[i+1][-2]])
-        if exclusive:
-            for obj in [obj1,obj2]:
-                for link in self.getAllItemsFromPage(obj['linkedObjectRelations']):
-                        self.delete(link["selfUrl"])
-
-        return self.post(self.baseUrl+'/object-links',
-                          json={'object1':obj1, 'object2': obj2} )
 
 
 
