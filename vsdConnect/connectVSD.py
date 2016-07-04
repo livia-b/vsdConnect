@@ -58,7 +58,8 @@ try:
 except:
     import xml.etree.ElementTree as ET
 
-
+import logging
+logger = logging.getLogger(__name__)
 
 
 requests.packages.urllib3.disable_warnings()
@@ -162,22 +163,9 @@ class VSDConnecter:
             self.token = token.tokenValue
             self.s.auth = JWTAuth(self.token)
 
-
-
-
-    def _httpResponseCheck(self, response):
-        """
-        check the response of a request call to the resouce.
-        """
-
-        try:
-            response.raise_for_status()
-            return True, response.status_code
-
-        except requests.exceptions.HTTPError as e:
-            print("And you get an HTTPError: {0}".format(e))
-            return False, response.status_code
-
+    ######################################################
+    # session management
+    ########################################################
     def _validate_exp(self):
         """
         checks if the session is still valid
@@ -212,7 +200,6 @@ class VSDConnecter:
         if not self._validate_exp():
             self.s.auth = JWTAuth(self.getJWTtoken().tokenValue)
 
-
     def getJWTtoken(self):
         """
         request the JWT token from the server using Basic Auth
@@ -236,6 +223,70 @@ class VSDConnecter:
 
         return token
 
+    #################################################
+    #requests library wrappers
+    ################################################
+    
+    def _download(self, url, filename):
+        r = urlparse.urlparse(url)
+        res = self._get(r.geturl(),params= r.params, stream = True)
+        with open(filename, 'wb') as f:
+            for chunk in res.iter_content(1024):
+                f.write(chunk)
+                res = self._get(self.fullUrl(resource), stream = True)
+        # if res.ok:
+        #     with fp.open('wb') as f:
+        #         shutil.copyfileobj(res.raw, f)
+        #     return res.status_code
+        # else:
+        #     return None
+    
+    def _requestsAttempts(self, method, url, *args, **kwargs):
+        """
+        generic wrapper around request library with multiple attempts
+        replaces self._httpResponseCheck(self, response):
+        :param method: string of the method to call "get", "put"
+        :param url: full  url
+        :param args: args for request call
+        :param kwargs: kwargs for request call
+        :return: request json (raise if error after self.maxAttempts)
+        """
+        self._stayAlive()
+        for i in range(self.maxAttempts):
+            res =  method(url, *args, **kwargs)
+            try:
+                res.raise_for_status()
+                return res.json()
+            except:
+                logger.info("Connection attempt %s/%s: %s" %(i, self.maxAttempts, res))
+                if res.status_code == 401 and i > self.maxAttempts401:
+                        raise
+        #re-raise if > max attempts
+        res.raise_for_status()
+        return res.json()
+
+    def _get(self, resource, *args, **kwargs): #reimplements VSDConnect.getRequest
+        return self._requestsAttempts(self.session.get, resource, *args, **kwargs)
+
+    def _put(self, resource, *args, **kwargs):#reimplements VSDConnect.putRequest
+        return self._requestsAttempts(self.session.put, resource, *args, **kwargs)
+
+    def _delete(self, resource, *args, **kwargs):#reimplements VSDConnect.postRequest
+        return self._requestsAttempts(self.session.delete, resource, *args, **kwargs)
+
+    def _post(self, resource, **kwargs):
+        #not idempotent, no multiple  attempts
+        res = self.session.post(self.fullUrl(resource), **kwargs)
+        res.raise_for_status()
+        return res.json()
+    
+    def _options(self, resource, *args, **kwargs): #reimplements VSDConnect.getRequest
+        return self._requestsAttempts(self.session.options, resource, *args, **kwargs)
+
+    #################################################
+    #api objects handling
+    ################################################
+
     def getAPIObjectType(self, response):
         """
         create an APIObject depending on the type
@@ -244,41 +295,15 @@ class VSDConnecter:
         :return: object
         :rtype: APIObject
         """
-        apiObject = APIObject()
-        apiObject.set(obj = response)
-        objectType = APIObjectType()
-        objectType.set(obj = apiObject.type)
-
-        if objectType.name == 'RawImage':
-            obj = APIObjectRaw()
-        elif objectType.name == 'SegmentationImage':
-            obj = APIObjectSeg()
-        elif objectType.name == 'StatisticalModel':
-            obj = APIObjectSm()
-        elif objectType.name == 'ClinicalStudyDefinition':
-            obj = APIObjectCtDef()
-        elif objectType.name == 'ClinicalStudyData':
-            obj = APIObjectCtData()
-        elif objectType.name == 'SurfaceModel':
-            obj = APIObjectSurfModel()
-        elif objectType.name == 'GenomicPlatform':
-            obj = APIObjectGenPlatform()
-        elif objectType.name == 'GenomicSample':
-            obj = APIObjectGenSample()
-        elif objectType.name == 'GenomicSeries':
-            obj = APIObjectGenSeries()
-        elif objectType.name == 'Study':
-            obj = APIObjectStudy()
-        elif objectType.name == 'Subject':
-            obj = APIObjectSubject()
-        elif objectType.name == 'Plain':
-            obj = APIObject()
-        elif objectType.name == 'PlainSubject':
-            obj = APIObject()
-        else:
-            obj = APIObject()
+        import models
+        from models import APIObject
+        apiObject = APIObject(response)
+        objectType = apiObject.type.name #'RawImage'
+        if objectType not in dir(models,objectType):
+            logger.warning("Unknown type %s" %objectType)
+            return apiObject
+        obj = getattr(models,objectType)
         return obj
-
 
     def fullUrl(self, resource):
         """
@@ -295,8 +320,6 @@ class VSDConnecter:
         else:
             return self.url + resource
 
-
-
     def optionsRequest(self, resource):
         """
         generic options request function
@@ -308,16 +331,11 @@ class VSDConnecter:
 
         self._stayAlive()
 
-        try:
-            res = self.s.options(self.fullUrl(resource))
-            if self._httpResponseCheck(res):
-                if res.status_code == requests.codes.ok:
-                    return res.json()
-                else:
-                    return None
-        except requests.exceptions.RequestException as err:
-            print('option request failed:', err)
-            return None
+        return self._options(resource)
+
+    #################################################
+    #api objects handling (READ)
+    ################################################
 
     def getRequest(self, resource, rpp = None, page = None, include = None):
         """
@@ -332,21 +350,7 @@ class VSDConnecter:
         """
 
         params = dict([('rpp', rpp),('page', page),('include', include)])
-
-        self._stayAlive()
-
-        try:
-
-            res = self.s.get(self.fullUrl(resource), params = params)
-
-            if self._httpResponseCheck(res):
-                if res.status_code == requests.codes.ok:
-                    return res.json()
-                else:
-                    return None
-        except requests.exceptions.RequestException as err:
-            print('request failed:', err)
-            return None
+        return self._get(self.fullUrl(resource), params = params)
 
     def downloadZip(self, resource, fp):
         """
@@ -357,16 +361,11 @@ class VSDConnecter:
         :return: None or status_code ok (200)
         :rtype: int
         """
-
-        self._stayAlive()
-
-        res = self.s.get(self.fullUrl(resource), stream = True)
-        if res.ok:
-            with fp.open('wb') as f:
-                shutil.copyfileobj(res.raw, f)
-            return res.status_code
-        else:
-            return None
+        try:
+            filename = fp.name #path object
+        except:
+            filename = fp #string
+        self._download(resource, filename)
 
     def downloadObject(self, obj, wp = None):
         """
@@ -378,40 +377,14 @@ class VSDConnecter:
         :rtype: str
         """
 
-        self._stayAlive()
-
         fp = Path(obj.name).with_suffix('.zip')
         if wp:
             fp = Path(wp, fp)
 
-        res = self.s.get(self.fullUrl(obj.downloadUrl), stream = True)
-        if res.ok:
-            with fp.open('wb') as f:
-                shutil.copyfileobj(res.raw, f)
-            return fp
-        else:
-            return None
-
-
-    def removeLinks(self, resource):
-        """
-        removes all related item from an object
-
-        :param str resource: resouce path url
-        :return: True if successful or False if failed
-        :rtype: bool
-        """
-
-        obj = self.getObject(resource)
-        status = False
-        if obj.linkedObjectRelations:
-            for link in obj.linkedObjectRelations:
-                self.delRequest(link["selfUrl"])
-        else:
-            print('nothing to delete, no links available')
+        res = self._download(self.fullUrl(obj.downloadUrl), fp)
 
     def getPaginated(self, resource):
-        """ 
+        """
         get paginated object
         """
         res = self.getRequest(resource)
@@ -480,29 +453,9 @@ class VSDConnecter:
             resource = 'objects/' + str(resource)
 
         res = self.getRequest(resource)
-        if res:
-            obj = self.getAPIObjectType(res)
-            obj.set(obj = res)
-            return obj
-        else:
-            return res
-
-    def putObject(self, obj):
-        """update an objects information
-
-        :param APIObject obj: an APIObject
-        :return: the updated object
-        :rtype: APIObject
-        """
-
-        res = self.putRequest(obj.selfUrl, data = obj.get())
-
-        if res:
-            obj = self.getAPIObjectType(res)
-            obj.set(obj = res)
-            return obj
-        else:
-            return res
+        obj = self.getAPIObjectType(res)
+        obj.populate(res)
+        return obj
 
     def getFolder(self, resource):
         """retrieve an folder based on the folderID
@@ -522,147 +475,6 @@ class VSDConnecter:
             return folder
         else:
             return res
-
-
-    def postRequest(self, resource, data):
-        """add data to an object
-
-        :param str resource: relative path of the resource or selfUrl
-        :param json data: data to be added to the resource
-        :return: the resource object
-        :rtype: json
-        :raises: RequestException
-        """
-
-        self._stayAlive()
-
-        try:
-            req = self.s.post(self.fullUrl(resource), json = data)
-            print('status code:', req.status_code)
-            #if req.status_code == requests.codes.created:
-            return req.json()
-        except requests.exceptions.RequestException as err:
-            print('request failed:',err)
-            return None
-
-
-    def putRequest(self, resource, data):
-        """ update data of an object
-
-        :param str resource: defines the relative path to the api resource
-        :param json data: data to be added to the object
-        :return: the updated object
-        :rtype: json
-        """
-
-        self._stayAlive()
-
-        try:
-            req = self.s.put(self.fullUrl(resource), json = data)
-            if req.status_code == requests.codes.ok:
-                return req.json()
-            else:
-                return None
-        except requests.exceptions.RequestException as err:
-            print('request failed:',err)
-            return None
-
-
-    def postRequestSimple(self, resource):
-        """
-        post (create) a resource
-
-        :param str resource: resource path
-        :return: the resource object
-        :rtype: json
-        """
-
-        self._stayAlive()
-
-        req = self.s.post(self.fullUrl(resource))
-        return req.json()
-
-    def putRequestSimple(self, resource):
-        """
-        put (update) a resource
-
-        :param str resource: resource path
-        :return: the resource object
-        :rtype: json
-        """
-
-        self._stayAlive()
-
-        req = self.s.put(self.fullUrl(resource))
-        return req.json()
-
-    def delRequest(self, resource):
-        """
-        generic delete request
-
-        :param str resource: resource path
-        :return: status_code
-        :rtype: int
-        """
-
-        try:
-            req = self.s.delete(self.fullUrl(resource))
-            if req.status_code == requests.codes.ok:
-                print('resource {0} deleted, 200'.format(self.fullUrl(resource)))
-                return req.status_code
-            elif req.status_code == requests.codes.no_content:
-                print('resource {0} deleted, 204'.format(self.fullUrl(resource)))
-                return req.status_code
-            else:
-                print('resource {0} NOT (not existing or other problem) deleted'.format(self.fullUrl(resource)))
-                return req.status_code
-
-        except requests.exceptions.RequestException as err:
-            print('del request failed:',err)
-            return
-
-    def delObject(self, obj):
-        """
-        delete an unvalidated object
-
-        :param APIObject obj: the object to delete
-        :return: status_code
-        :rtype: int
-        """
-
-        try:
-            req = self.s.delete(obj.selfUrl)
-            if req.status_code == requests.codes.ok:
-                print('object {0} deleted'.format(obj.id))
-                return req.status_code
-            else:
-                return req.status_code
-                print('not deleted', req.status_code)
-
-        except requests.exceptions.RequestException as err:
-            print('del request failed:',err)
-
-
-    def publishObject(self, obj):
-        """
-        publisch an unvalidated object
-
-        :param APIObject obj: the object to publish
-        :return: returns the object
-        :rtype: APIObject
-        """
-
-        try:
-            req = self.s.put(obj.selfUrl + '/publish')
-            if req.status_code == requests.codes.ok:
-                print('object {0} published'.format(obj.id))
-                return self.getObject(obj.selfUrl)
-
-
-        except requests.exceptions.RequestException as err:
-            print('publish request failed:',err)
-
-
 
     def getObjectFilesHash(self, obj):
         """
@@ -731,114 +543,107 @@ class VSDConnecter:
         req = self.getRequest(url)
         return req.json()
 
-
-
-    def uploadFile(self, filename):
+    def showObjectInformation(self, obj):
         """
-        push (post) a file to the server
+        display the object information user readable format
 
-        :param Path filename: the file to be uploaded
-        :return: the file object containing the related object selfUrl
-        :rtype: APIObject
+        :param APIObject obj: object
         """
 
-        try:
-            data = filename.open(mode = 'rb').read()
-            ##workaround for file without file extensions
-            if filename.suffix =='':
-                filename = filename.with_suffix('.dcm')
-            files  = { 'file' : (str(filename.name), data)}
-        except:
-            print ("opening file", filename, "failed, aborting")
-            return
+        print('---------General Information ----------')
+        if obj.description is not None:
+            print('description:', obj.description)
+        if obj.name is not None:
+            print('name: ', obj.name)
+        if obj.createdDate is not None:
+            print('creation date: ', obj.createdDate)
+        if obj.id is not None:
+            print('id: ', obj.id)
+        if obj.type is not None:
+            print('type: ', obj.type)
 
-        res = self.s.post(self.url + 'upload', files = files)
-        if res.status_code == requests.codes.created:
-            obj = self.getAPIObjectType(res)
-            obj.set(obj = res)
-            return obj
+        print('todo')
+
+        if obj.modality is not None:
+            print('---------Modality----------')
+            basic = APIBasic()
+            basic.set(obj = obj.modality)
+            mod = self.getModality(basic.selfUrl)
+
+            print('name: ', mod.name)
+            print('description', mod.description)
+            print('selfUrl: ', mod.selfUrl)
+            print('id: ', mod.id)
+
+
+
+        if obj.ontologyItems is not None:
+            print('---------Ontology items----------')
+            for onto in obj.ontologyItems:
+                basic = APIBasic()
+                basic.set(obj = onto)
+                ontology = self.getOntologyItem(basic.selfUrl)
+
+                print('Term: ', ontology.term)
+                print('type', ontology.type)
+                print('selfUrl: ', ontology.selfUrl)
+                print('id: ', ontology.id)
+
+        if obj.license is not None:
+            print('---------License----------')
+            basic = APIBasic()
+            basic.set(obj = obj.license)
+            lic = self.getLicense(basic.selfUrl)
+            print('name: \t\t', lic.name)
+            print('description:\t', lic.description)
+            print('selfUrl:\t\t', lic.selfUrl)
+            print('id:\t\t\t', lic.id)
+
+        print('---------User Rights----------')
+        ur = self.getObjectUserRights(obj)
+        if ur:
+            for u in ur:
+                user = self.getUser(u.relatedUser['selfUrl'])
+                print('user:')
+                print(user.get())
+                print('rights:')
+                for r in u.relatedRights:
+                    print(self.getObjectRight(r['selfUrl']).get())
         else:
-            return res.status_code
+            print('nothing here')
 
+        print('---------GroupRights----------')
+        gr = self.getObjectGroupRights(obj)
+        if gr:
+            for g in gr:
+                group = self.getGroup(g.relatedGroup['selfUrl'])
+                print('group:')
+                print(group.get())
+                print('rights:')
+                for r in g.relatedRights:
+                    print(self.getObjectRight(r['selfUrl']).get())
+        else:
+            print('nothing here')
 
-    def chunkedread(self, fp, chunksize):
-        """
-        breaks the file into chunks of chunksize
+        def getFile(self, resource):
+            """
+            return a APIFile object
 
-        :param Path fp: the file to chunk
-        :param int chunksize: size in bytes of the chunk parts
-        :yields: chunk
-        """
+            :param str resource: resource path
+            :return: api file object  or status code
+            :rtype: APIFile
+            """
+            if isinstance(resource, int):
+                resource = 'files/{0}'.format(resource)
 
-        with fp.open('rb') as f:
-            while True:
-                chunk = f.read(chunksize)
-                if not chunk:
-                    break
-                yield(chunk)
+            res = self.getRequest(resource)
 
-    def chunkFileUpload(self, fp, chunksize = 1024*4096):
-        """
-        upload large files in chunks of max 100 MB size
-
-        :param Path fp: the file to upload
-        :param int chunksize: size in bytes of the chunk parts, default is 4MB
-        :return: the generated object
-        :rtype: APIObject
-        """
-        parts = math.ceil(fp.stat().st_size/chunksize)
-        part = 0
-        err = False
-        maxchunksize = 1024 * 1024 * 100
-        if chunksize < maxchunksize:
-            for chunk in self.chunkedread(fp, chunksize):
-                part = part + 1
-                print('uploading part {0} of {1}'.format(part,parts))
-
-                files  = { 'file' : (str(fp.name), chunk)}
-                res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files = files)
-                if res.status_code == requests.codes.ok:
-                    print('uploaded part {0} of {1}'.format(part,parts))
-                else:
-                    err = True
-
-            if not err:
-                resource = 'chunked_upload/commit?filename={0}'.format(fp.name)
-                res = self.postRequestSimple(resource)
-
-                relObj = res['relatedObject']
-                obj = self.getObject(relObj['selfUrl'])
-                return obj
-
+            if not isinstance(res, int):
+                fObj = APIFile()
+                fObj.set(res)
+                return fObj
             else:
-                return None
-        else:
-            print('not uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, method))
-            return None
-
-
-
-    def getFile(self, resource):
-        """
-        return a APIFile object
-
-        :param str resource: resource path
-        :return: api file object  or status code
-        :rtype: APIFile
-        """
-        if isinstance(resource, int):
-            resource = 'files/{0}'.format(resource)
-
-        res = self.getRequest(resource)
-
-        if not isinstance(res, int):
-            fObj = APIFile()
-            fObj.set(res)
-            return fObj
-        else:
             return res
-
-
 
     def getObjectFiles(self, obj):
         """
@@ -875,7 +680,6 @@ class VSDConnecter:
         fSelfUrl = f['selfUrl']
         return obj['selfUrl'], self.getOID(obj['selfUrl'])
 
-
     def getAllUnpublishedObjects(self, resource = 'objects/unpublished'):
         """ retrieve the unpublished objects as list of APIObject
 
@@ -894,7 +698,6 @@ class VSDConnecter:
             objects.append(obj)
         return objects
 
-
     def getLatestUnpublishedObject(self):
         """
         searches the list of unpublished objects and returns the newest object
@@ -911,9 +714,6 @@ class VSDConnecter:
         else:
             print('you have no unpublished objects')
             return None
-
-
-
 
     def getFolderByName(self, search, mode = 'default'):
         """
@@ -936,9 +736,9 @@ class VSDConnecter:
             url = self.url + "folders?$filter=startswith(Name,%27{0}%27)%20eq%20true".format(search)
 
 
-        self._stayAlive()
 
-        res = self.s.get(url)
+
+        res = self._get(url)
 
         if res.status_code == requests.codes.ok:
 
@@ -1010,24 +810,221 @@ class VSDConnecter:
             print('the folder does not have any contained objects')
             return None
 
-    def deleteFolderContent(self, folder):
-        """ delete all content from a folder (APIFolder)
+       def getModalityList(self):
+        """
+        retrieve a list of modalities objects (APIModality)
 
-        :param APIFolder folder: a folder object
-        :return state: returns true if successful, else False
+        :return: list of available modalities
+        :rtype: list of APIModality
+        """
+
+        modalities = list()
+        items = self.getAllPaginated('modalities', itemlist = list())
+        if items:
+            for item in items:
+                modality = APIModality()
+                modality.set(obj = item)
+                modalities.append(modality)
+        return modalities
+
+    def getModality(self, resource):
+        """ retrieve a modalities object (APIModality)
+
+
+        :param int,str resource: resource path to the of the modality
+        :return: the modality object
+        :rtype: APIModality
+        """
+
+        if isinstance(resource, int):
+            resource = 'modalities/{0}'.format(resource)
+
+        res = self.getRequest(resource)
+        if res:
+            mod = APIModality()
+            mod.set(obj = res)
+
+            return mod
+        else:
+            return None
+
+    def readFolders(self,folderList):
+    #first pass: create one entry for each folder:
+        folderHash={}
+        for folder in folderList['items']:
+            ID=folder['id']
+            folderHash[ID]=Folder()
+            folderHash[ID].ID=ID
+            folderHash[ID].name=folder['name']
+            folderHash[ID].childFolders=[]
+
+    #second pass: create references to parent and child folders
+        for folder in folderList['items']:
+            ID=folder['id']
+            if (folder['childFolders']!=None):
+            #print (folder['childFolders'],ID)
+                for child in folder['childFolders']:
+                    childID=int(child['selfUrl'].split("/")[-1])
+                    if (folderHash.has_key(childID)):
+                        folderHash[ID].childFolders.append(folderHash[childID])
+            if (folder['parentFolder']!=None):
+                parentID=int(folder['parentFolder']['selfUrl'].split("/")[-1])
+                if (folderHash.has_key(parentID)):
+                    folderHash[ID].parentFolder=folderHash[parentID]
+            if (not folder['containedObjects']==None):
+                folderHash[ID].containedObjects={}
+                for obj in folder['containedObjects']:
+                    objID=obj['selfUrl'].split("/")[-1]
+                    folderHash[ID].containedObjects[objID]=obj['selfUrl']
+
+        #third pass: gett full path names in folder hierarchy
+        for key, folder in folderHash.iteritems():
+            folder.getFullName()
+
+        return folderHash
+
+
+    #################################################
+    #api objects handling (MODIFY)
+    ################################################
+    def postRequest(self, resource, data):
+        """add data to an object
+
+        :param str resource: relative path of the resource or selfUrl
+        :param json data: data to be added to the resource
+        :return: the resource object
+        :rtype: json
+        :raises: RequestException
+        """
+
+
+
+        try:
+            req = self.s.post(self.fullUrl(resource), json = data)
+            print('status code:', req.status_code)
+            #if req.status_code == requests.codes.created:
+            return req.json()
+        except requests.exceptions.RequestException as err:
+            print('request failed:',err)
+            return None
+
+    def removeLinks(self, resource):
+        """
+        removes all related item from an object
+
+        :param str resource: resouce path url
+        :return: True if successful or False if failed
         :rtype: bool
         """
 
-        state = False
+        obj = self.getObject(resource)
+        status = False
+        if obj.linkedObjectRelations:
+            for link in obj.linkedObjectRelations:
+                self.delRequest(link["selfUrl"])
+        else:
+            print('nothing to delete, no links available')
 
-        folder.containedObjects = None
+    def delRequest(self, resource):
+        """
+        generic delete request
 
-        res = self.putRequest('folders', data = folder.get())
+        :param str resource: resource path
+        :return: status_code
+        :rtype: int
+        """
 
-        if not isinstance(res, int):
-            state = True
+        try:
+            req = self.s.delete(self.fullUrl(resource))
+            if req.status_code == requests.codes.ok:
+                print('resource {0} deleted, 200'.format(self.fullUrl(resource)))
+                return req.status_code
+            elif req.status_code == requests.codes.no_content:
+                print('resource {0} deleted, 204'.format(self.fullUrl(resource)))
+                return req.status_code
+            else:
+                print('resource {0} NOT (not existing or other problem) deleted'.format(self.fullUrl(resource)))
+                return req.status_code
 
-        return state
+        except requests.exceptions.RequestException as err:
+            print('del request failed:',err)
+            return
+
+    def delObject(self, obj):
+        """
+        delete an unvalidated object
+
+        :param APIObject obj: the object to delete
+        :return: status_code
+        :rtype: int
+        """
+
+        try:
+            req = self.s.delete(obj.selfUrl)
+            if req.status_code == requests.codes.ok:
+                print('object {0} deleted'.format(obj.id))
+                return req.status_code
+            else:
+                return req.status_code
+                print('not deleted', req.status_code)
+
+        except requests.exceptions.RequestException as err:
+            print('del request failed:',err)
+
+    def chunkedread(self, fp, chunksize):
+        """
+        breaks the file into chunks of chunksize
+
+        :param Path fp: the file to chunk
+        :param int chunksize: size in bytes of the chunk parts
+        :yields: chunk
+        """
+
+        with fp.open('rb') as f:
+            while True:
+                chunk = f.read(chunksize)
+                if not chunk:
+                    break
+                yield(chunk)
+
+    def chunkFileUpload(self, fp, chunksize = 1024*4096):
+        """
+        upload large files in chunks of max 100 MB size
+
+        :param Path fp: the file to upload
+        :param int chunksize: size in bytes of the chunk parts, default is 4MB
+        :return: the generated object
+        :rtype: APIObject
+        """
+        parts = math.ceil(fp.stat().st_size/chunksize)
+        part = 0
+        err = False
+        maxchunksize = 1024 * 1024 * 100
+        if chunksize < maxchunksize:
+            for chunk in self.chunkedread(fp, chunksize):
+                part = part + 1
+                print('uploading part {0} of {1}'.format(part,parts))
+
+                files  = { 'file' : (str(fp.name), chunk)}
+                res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files = files)
+                if res.status_code == requests.codes.ok:
+                    print('uploaded part {0} of {1}'.format(part,parts))
+                else:
+                    err = True
+
+            if not err:
+                resource = 'chunked_upload/commit?filename={0}'.format(fp.name)
+                res = self.postRequestSimple(resource)
+
+                relObj = res['relatedObject']
+                obj = self.getObject(relObj['selfUrl'])
+                return obj
+
+            else:
+                return None
+        else:
+            print('not uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, method))
+            return None
 
     def getFolderContent(self, folder, recursive = False, mode = 'd'):
         """
@@ -1086,9 +1083,6 @@ class VSDConnecter:
 
         return content
 
-
-
-
     def searchOntologyTerm(self, search, oType = '0', mode = 'default'):
         """
         Search ontology term in a single ontology resource. Two modes are available to either find the exact term or based on a partial match
@@ -1106,9 +1100,9 @@ class VSDConnecter:
             url = self.url+"ontologies/{0}?$filter=startswith(Term,%27{1}%27)%20eq%20true".format(oType,search)
 
 
-        self._stayAlive()
 
-        res = self.s.get(url)
+
+        res = self._get(url)
         if res.status_code == requests.codes.ok:
             result = list()
 
@@ -1127,8 +1121,6 @@ class VSDConnecter:
         else:
             return res.status_code
 
-
-
     def getOntologyTermByID(self, oid, oType = 0):
         """
         Retrieve an ontology entry based on the IRI
@@ -1139,12 +1131,11 @@ class VSDConnecter:
         :rtype: json
         """
 
-        self._stayAlive()
+
 
         url = "ontologies/{0}/{1}".format(oType,oid)
         req = self.getRequest(url)
         return req.json()
-
 
     def getOntologyItem(self, resource, oType = 0):
         """
@@ -1156,7 +1147,7 @@ class VSDConnecter:
         :rtype: APIOntology
         """
 
-        self._stayAlive()
+
 
         if isinstance(resource, int):
             resource = 'ontology/{0}/{1}'.format(resource, oType)
@@ -1170,7 +1161,6 @@ class VSDConnecter:
             return onto
         else:
             return None
-
 
     def getLicenseList(self):
         """ retrieve a list of the available licenses (APILicense)
@@ -1189,7 +1179,6 @@ class VSDConnecter:
                 licenses.append(lic)
 
         return licenses
-
 
     def getLicense(self, resource):
         """ retrieve a license (APILicense)
@@ -1272,7 +1261,6 @@ class VSDConnecter:
 
         return groups, ppObj
 
-
     def getGroup(self, resource):
         """ retrieve a group object (APIGroup)
 
@@ -1292,7 +1280,6 @@ class VSDConnecter:
             return group
         else:
             return None
-
 
     def getUser(self, resource):
         """ retrieve a user object (APIUser)
@@ -1361,7 +1348,6 @@ class VSDConnecter:
 
         return rights
 
-
     def getObjectUserRights(self, obj):
         """
         get the list of attaced user rights of an object
@@ -1381,6 +1367,180 @@ class VSDConnecter:
                 rights.append(right)
 
         return rights
+
+    def postFolder(self, parent, name, check = True):
+        """
+        creates the folder with a given name (name) inside a folder (parent) if not already exists
+
+        :param APIFolder parent: the root folder
+        :param str name: name of the folder which should be created
+        :param bool check: it we should check if already exist, default = True
+        :return: the folder object of the generated folder or the existing folder
+        :rtype: APIFolder
+        """
+
+        folder = APIFolder()
+        folder.parentFolder = dict([('selfUrl', parent.selfUrl)])
+        folder.name = name
+
+        exists = False
+
+        if check:
+            if parent.childFolders:
+                for child in parent.childFolders:
+                    basic = APIBasic()
+                    basic.set(obj = child)
+                    fold = self.getFolder(basic.selfUrl)
+                    if fold is not None:
+                        if fold.name == name:
+                            print('folder {0} already exists, id: {1}'.format(name, fold.id))
+                            exists = True
+                    else:
+                        print('unexpected error, folder exists but cannot be retrieved')
+                        exists = True
+
+        if not exists:
+            res = self.postRequest('folders', data = folder.get())
+            if res is not None:
+                folder.set(obj = res)
+                print('folder {0} created, has id {1}'.format(name, folder.id))
+            return folder
+        else:
+            return fold
+
+    def uploadFile(self, filename):
+        """
+        push (post) a file to the server
+
+        :param Path filename: the file to be uploaded
+        :return: the file object containing the related object selfUrl
+        :rtype: APIObject
+        """
+
+        try:
+            data = filename.open(mode = 'rb').read()
+            ##workaround for file without file extensions
+            if filename.suffix =='':
+                filename = filename.with_suffix('.dcm')
+            files  = { 'file' : (str(filename.name), data)}
+        except:
+            print ("opening file", filename, "failed, aborting")
+            return
+
+        res = self.s.post(self.url + 'upload', files = files)
+        if res.status_code == requests.codes.created:
+            obj = self.getAPIObjectType(res)
+            obj.set(obj = res)
+            return obj
+        else:
+            return res.status_code
+
+    #################################################
+    #api objects handling (UPDATE)
+    ################################################
+    def putObject(self, obj):
+        """update an objects information
+
+        :param APIObject obj: an APIObject
+        :return: the updated object
+        :rtype: APIObject
+        """
+
+        res = self.putRequest(obj.selfUrl, data = obj.get())
+
+        if res:
+            obj = self.getAPIObjectType(res)
+            obj.set(obj = res)
+            return obj
+        else:
+            return res
+
+    def putRequest(self, resource, data):
+        """ update data of an object
+
+        :param str resource: defines the relative path to the api resource
+        :param json data: data to be added to the object
+        :return: the updated object
+        :rtype: json
+        """
+
+
+
+        try:
+            req = self._put(self.fullUrl(resource), json = data)
+            if req.status_code == requests.codes.ok:
+                return req.json()
+            else:
+                return None
+        except requests.exceptions.RequestException as err:
+            print('request failed:',err)
+            return None
+
+    def postRequestSimple(self, resource):
+        """
+        post (create) a resource
+
+        :param str resource: resource path
+        :return: the resource object
+        :rtype: json
+        """
+
+
+
+        req = self.s.post(self.fullUrl(resource))
+        return req.json()
+
+    def putRequestSimple(self, resource):
+        """
+        put (update) a resource
+
+        :param str resource: resource path
+        :return: the resource object
+        :rtype: json
+        """
+
+
+
+        req = self.s.put(self.fullUrl(resource))
+        return req.json()
+
+    def publishObject(self, obj):
+        """
+        publisch an unvalidated object
+
+        :param APIObject obj: the object to publish
+        :return: returns the object
+        :rtype: APIObject
+        """
+
+        try:
+            req = self.s.put(obj.selfUrl + '/publish')
+            if req.status_code == requests.codes.ok:
+                print('object {0} published'.format(obj.id))
+                return self.getObject(obj.selfUrl)
+
+
+        except requests.exceptions.RequestException as err:
+            print('publish request failed:',err)
+
+    def deleteFolderContent(self, folder):
+        """ delete all content from a folder (APIFolder)
+
+        :param APIFolder folder: a folder object
+        :return state: returns true if successful, else False
+        :rtype: bool
+        """
+
+        state = False
+
+        folder.containedObjects = None
+
+        res = self.putRequest('folders', data = folder.get())
+
+        if not isinstance(res, int):
+            state = True
+
+        return state
 
     def postObjectRights(self, obj, group, perms, isuser = False):
         """
@@ -1471,83 +1631,6 @@ class VSDConnecter:
 
         return objRight
 
-
-
-
-    def getModalityList(self):
-        """
-        retrieve a list of modalities objects (APIModality)
-
-        :return: list of available modalities
-        :rtype: list of APIModality
-        """
-
-        modalities = list()
-        items = self.getAllPaginated('modalities', itemlist = list())
-        if items:
-            for item in items:
-                modality = APIModality()
-                modality.set(obj = item)
-                modalities.append(modality)
-        return modalities
-
-    def getModality(self, resource):
-        """ retrieve a modalities object (APIModality)
-
-
-        :param int,str resource: resource path to the of the modality
-        :return: the modality object
-        :rtype: APIModality
-        """
-
-        if isinstance(resource, int):
-            resource = 'modalities/{0}'.format(resource)
-
-        res = self.getRequest(resource)
-        if res:
-            mod = APIModality()
-            mod.set(obj = res)
-
-            return mod
-        else:
-            return None
-
-    def readFolders(self,folderList):
-    #first pass: create one entry for each folder:
-        folderHash={}
-        for folder in folderList['items']:
-            ID=folder['id']
-            folderHash[ID]=Folder()
-            folderHash[ID].ID=ID
-            folderHash[ID].name=folder['name']
-            folderHash[ID].childFolders=[]
-
-    #second pass: create references to parent and child folders
-        for folder in folderList['items']:
-            ID=folder['id']
-            if (folder['childFolders']!=None):
-            #print (folder['childFolders'],ID)
-                for child in folder['childFolders']:
-                    childID=int(child['selfUrl'].split("/")[-1])
-                    if (folderHash.has_key(childID)):
-                        folderHash[ID].childFolders.append(folderHash[childID])
-            if (folder['parentFolder']!=None):
-                parentID=int(folder['parentFolder']['selfUrl'].split("/")[-1])
-                if (folderHash.has_key(parentID)):
-                    folderHash[ID].parentFolder=folderHash[parentID]
-            if (not folder['containedObjects']==None):
-                folderHash[ID].containedObjects={}
-                for obj in folder['containedObjects']:
-                    objID=obj['selfUrl'].split("/")[-1]
-                    folderHash[ID].containedObjects[objID]=obj['selfUrl']
-
-        #third pass: gett full path names in folder hierarchy
-        for key, folder in folderHash.iteritems():
-            folder.getFullName()
-
-        return folderHash
-
-
     def addLink(self, obj1, obj2):
         """ add an object link
 
@@ -1588,46 +1671,6 @@ class VSDConnecter:
             print('position needs to be a number (int)')
 
         return isset
-
-    def postFolder(self, parent, name, check = True):
-        """
-        creates the folder with a given name (name) inside a folder (parent) if not already exists
-
-        :param APIFolder parent: the root folder
-        :param str name: name of the folder which should be created
-        :param bool check: it we should check if already exist, default = True
-        :return: the folder object of the generated folder or the existing folder
-        :rtype: APIFolder
-        """
-
-        folder = APIFolder()
-        folder.parentFolder = dict([('selfUrl', parent.selfUrl)])
-        folder.name = name
-
-        exists = False
-
-        if check:
-            if parent.childFolders:
-                for child in parent.childFolders:
-                    basic = APIBasic()
-                    basic.set(obj = child)
-                    fold = self.getFolder(basic.selfUrl)
-                    if fold is not None:
-                        if fold.name == name:
-                            print('folder {0} already exists, id: {1}'.format(name, fold.id))
-                            exists = True
-                    else:
-                        print('unexpected error, folder exists but cannot be retrieved')
-                        exists = True
-
-        if not exists:
-            res = self.postRequest('folders', data = folder.get())
-            if res is not None:
-                folder.set(obj = res)
-                print('folder {0} created, has id {1}'.format(name, folder.id))
-            return folder
-        else:
-            return fold
 
     def deleteFolder(self, folder, recursive = False):
         """remove a folder (APIFolder)
@@ -1702,8 +1745,6 @@ class VSDConnecter:
             #jData = jFolder(folder)
             return None
 
-
-
     def addObjectToFolder(self, target, obj):
         """
         add an object to the folder
@@ -1763,126 +1804,7 @@ class VSDConnecter:
 
         return isset
 
-    def showObjectInformation(self, obj):
-        """
-        display the object information user readable format
 
-        :param APIObject obj: object
-        """
-
-        print('---------General Information ----------')
-        if obj.description is not None:
-            print('description:', obj.description)
-        if obj.name is not None:
-            print('name: ', obj.name)
-        if obj.createdDate is not None:
-            print('creation date: ', obj.createdDate)
-        if obj.id is not None:
-            print('id: ', obj.id)
-        if obj.type is not None:
-            print('type: ', obj.type)
-
-        print('todo')
-
-        if obj.modality is not None:
-            print('---------Modality----------')
-            basic = APIBasic()
-            basic.set(obj = obj.modality)
-            mod = self.getModality(basic.selfUrl)
-
-            print('name: ', mod.name)
-            print('description', mod.description)
-            print('selfUrl: ', mod.selfUrl)
-            print('id: ', mod.id)
-
-
-
-        if obj.ontologyItems is not None:
-            print('---------Ontology items----------')
-            for onto in obj.ontologyItems:
-                basic = APIBasic()
-                basic.set(obj = onto)
-                ontology = self.getOntologyItem(basic.selfUrl)
-
-                print('Term: ', ontology.term)
-                print('type', ontology.type)
-                print('selfUrl: ', ontology.selfUrl)
-                print('id: ', ontology.id)
-
-        if obj.license is not None:
-            print('---------License----------')
-            basic = APIBasic()
-            basic.set(obj = obj.license)
-            lic = self.getLicense(basic.selfUrl)
-            print('name: \t\t', lic.name)
-            print('description:\t', lic.description)
-            print('selfUrl:\t\t', lic.selfUrl)
-            print('id:\t\t\t', lic.id)
-
-        print('---------User Rights----------')
-        ur = self.getObjectUserRights(obj)
-        if ur:
-            for u in ur:
-                user = self.getUser(u.relatedUser['selfUrl'])
-                print('user:')
-                print(user.get())
-                print('rights:')
-                for r in u.relatedRights:
-                    print(self.getObjectRight(r['selfUrl']).get())
-        else:
-            print('nothing here')
-
-        print('---------GroupRights----------')
-        gr = self.getObjectGroupRights(obj)
-        if gr:
-            for g in gr:
-                group = self.getGroup(g.relatedGroup['selfUrl'])
-                print('group:')
-                print(group.get())
-                print('rights:')
-                for r in g.relatedRights:
-                    print(self.getObjectRight(r['selfUrl']).get())
-        else:
-            print('nothing here')
-
-
-class APIBasic(object):
-    """
-    APIBasic
-
-    :attributes:
-        * selfUrl
-    """
-
-    oKeys = list([
-       'selfUrl'
-        ])
-
-    def __init__(self, oKeys = oKeys):
-        for v in oKeys:
-                setattr(self, v, None)
-
-    def set(self, obj = None):
-        """
-        sets class variable for each key in the object to the keyname and its value
-
-        :param APIBasic obj: A APIBasic object
-        """
-        if  obj:
-            for v in self.oKeys:
-                if v in obj:
-                    setattr(self, v, obj[v])
-        else:
-            for v in self.oKeys:
-                setattr(self, v, None)
-
-    def get(self):
-        """transforms the class object into a json readable dict"""
-        return self.__dict__
-
-    def show(self):
-        """prints the json to the console, nicely printed"""
-        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
 class APIObject(APIBasic):
     """
