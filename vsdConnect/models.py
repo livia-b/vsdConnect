@@ -11,12 +11,12 @@ class ParamsPagination(models.Base):
     page = fields.IntField()
 
 class APIBasic(models.Base):
-    selfUrl = fieldURL(required=True)
+    selfUrl = fieldURL()
 
 class APIPagination(models.Base):
-    totalCount = fields.IntField(required=True)
+    totalCount = fields.IntField()
     pagination = fields.EmbeddedField(ParamsPagination)
-    items = fields.ListField(APIBasic)
+    items = fields.ListField(dict) #generic dict in order to retain all the keys
     nextPageUrl = fieldURL()
 
     def firstUrlInPage(self):
@@ -24,22 +24,27 @@ class APIPagination(models.Base):
         return firstItem.selfUrl
 
 class APIFile(APIBasic):
-    id = fields.IntField(required=True)
+    id = fields.IntField()
     createdDate = fields.StringField()
     downloadUrl = fieldURL()
     originalFileName = fields.StringField()
     anonymizedFileHashCode = fields.StringField()
-    size = fields.StringField()
+    size = fields.IntField()
     fileHashCode = fields.StringField()
 
+class APIObjectType(APIBasic):
+    displayName = fields.StringField()
+    name = fields.StringField()
+    displayNameShort = fields.StringField()
+
 class APIObject(APIBasic):
-    id = fields.IntField(required=True)
-    name = fields.StringField(required=True)
-    type = fields.EmbeddedField(APIBasic)
+    id = fields.IntField()
+    name = fields.StringField()
+    type = fields.EmbeddedField(APIObjectType)
     description  = fields.StringField()
     objectGroupRights = fields.ListField(APIBasic)
     objectUserRights = fields.StringField()
-    objectPreviews = fields.StringField()
+    objectPreviews = fields.ListField(APIBasic)
     createdDate = fields.StringField()
     modality = fields.StringField()
     ontologyItems = fields.EmbeddedField(APIPagination)
@@ -55,16 +60,17 @@ class ObjectPagination(APIPagination):
     items = fields.ListField(APIObject)
 
 class APIObjectLink(APIBasic):
-    id = fields.IntField(required=True)
+    id = fields.IntField()
     description = fields.StringField()
     object1 = fields.StringField()
     object2 = fields.StringField()
 
 class APIFolder(APIBasic):
-    id = fields.IntField(required=True)
-    level = fields.StringField()
+    id = fields.IntField()
+    name = fields.StringField()
+    level = fields.IntField()
     parentFolder = fields.EmbeddedField(APIBasic)
-    childFolders = fields.ListField('APIFolder')
+    childFolders = fields.ListField([ 'APIFolder'])
     folderGroupRights = fields.StringField()
     folderUserRights = fields.StringField()
     containedObjects = fields.ListField(APIBasic)
@@ -73,3 +79,23 @@ class FolderPagination(APIPagination):
     items = fields.ListField(APIFolder)
 
 
+class RawImage(APIObject):
+    rawImage = fields.EmbeddedField(dict) #{u'sliceThickness': None, u'kilovoltPeak': None, u'spaceBetweenSlices': None, u'modality': {u'description': u'White Matter Probabilistic Map', u'id': 39, u'selfUrl': u'https://demo.virtualskeleton.ch/api/modalities/39', u'name': u'MR_WM_prob'}}
+
+class RawImage(APIObject):
+    rawImage = fields.EmbeddedField(dict)
+
+class SurfaceModel(APIObject):
+    pass
+
+class SegmentationImage(APIObject):
+    pass
+
+class ClinicalStudyDefinition(APIObject):
+    pass
+
+class ClinicalStudyData(APIObject):
+    pass
+
+class StatisticalModel(APIObject):
+    pass
