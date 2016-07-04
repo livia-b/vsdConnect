@@ -32,7 +32,7 @@ This library implements a client for the REST API of the virtualskeletondatabase
 
     pip install vsdConnect
 
-    or, if you want to edit the source:
+or, if you want to edit the source:
 
     pip install --editable vsdConnect
 
@@ -56,11 +56,10 @@ This library implements a client for the REST API of the virtualskeletondatabase
 
 ## Get Started
 
-from vsdConnect import connectVSD
-
-api = connectVSD.VSDConnecter()
-obj = api.getObject(21)
-print(obj.selfUrl, obj.name)
+    from vsdConnect import connectVSD
+    api = connectVSD.VSDConnecter()
+    obj = api.getObject(21)
+    print(obj.selfUrl, obj.name)
 
 
 
