@@ -310,6 +310,13 @@ class VSDConnecter:
         obj = getattr(models,objectType)
         return obj
 
+    def createAPIObject(self, response=None, **kwargs):
+        #convert  fields to response dict
+        if response is None:
+            response = kwargs
+        objType = self.getAPIObjectType(response)
+        return objType(**response)
+
     def parseUrl(self,resource, type):
         if isinstance(resource, int):
             resource = "%s/%s" %(type, resource)
@@ -427,7 +434,7 @@ class VSDConnecter:
 
 
 
-    def iterateAllPaginated(self, resource, model = dict):
+    def iterateAllPaginated(self, resource, model = dict, fullDownload =False):
         """
         returns all items as list
 
@@ -440,10 +447,24 @@ class VSDConnecter:
         res = self.getRequest(resource)
         page = APIPagination(**res)
         for item in page.items:
+            if fullDownload:
+                item = self.getRequest(item['selfUrl'])
             yield model(**item)
+
         if page.nextPageUrl:
-            for nextItem in self.iterateAllPaginated(page.nextPageUrl, model=model):
+            for nextItem in self.iterateAllPaginated(page.nextPageUrl, model=model, fullDownload= fullDownload):
                 yield nextItem
+
+    def getObjects(self, idList=None):
+        if idList is None:
+            idList = ''
+        if idList in ['', 'published', 'unpublished']:
+            return self.iterateAllPaginated('objects/%s' % idList, model= self.createAPIObject)
+
+        items = []
+        for curId in idList:
+            items.append(self.getObject(curId))
+        return items
 
     def getOID(self, selfURL):
         """
@@ -473,8 +494,7 @@ class VSDConnecter:
         resource = self.parseUrl(resource, 'objects')
 
         res = self.getRequest(resource)
-        objType = self.getAPIObjectType(res)
-        obj = objType(**res)
+        obj = self.createAPIObject(res)
         return obj
 
     def getFolder(self, resource):
@@ -738,7 +758,7 @@ class VSDConnecter:
             print('you have no unpublished objects')
             return None
 
-    def getFolderByName(self, search, mode = 'default'):
+    def getFolderByName(self, search, mode = 'default', squeeze=True):
         """
         get a list of folder(s) based on a search string
 
@@ -760,7 +780,7 @@ class VSDConnecter:
 
         result = list(self.iterateAllPaginated(url, APIFolder))
 
-        if len(result) == 1:
+        if len(result) == 1 and squeeze:
             folder = result[0]
             print('1 folder matching the search found')
             return folder
@@ -1408,8 +1428,7 @@ class VSDConnecter:
 
         res = self.s.post(self.url + 'upload', files = files)
         if res.status_code == requests.codes.created:
-            obj = self.getAPIObjectType(res)
-            obj.set(obj = res)
+            obj = self.createAPIObject(res)
             return obj
         else:
             return res.status_code
@@ -1428,8 +1447,7 @@ class VSDConnecter:
         res = self.putRequest(obj.selfUrl, data = obj.get())
 
         if res:
-            obj = self.getAPIObjectType(res)
-            obj.set(obj = res)
+            obj = self.createAPIObject(res)
             return obj
         else:
             return res
