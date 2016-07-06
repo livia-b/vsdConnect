@@ -60,7 +60,7 @@ except:
 
 import models
 from models import APIObject, APIPagination, APIBasic, \
-    APIFolder, APIFile
+    APIFolder, APIFile, FilePagination, ObjectPagination
 import logging
 logger = logging.getLogger(__name__)
 
@@ -320,6 +320,7 @@ class VSDConnecter:
     def parseUrl(self,resource, type):
         if isinstance(resource, int):
             resource = "%s/%s" %(type, resource)
+        assert type in resource
         return self.fullUrl(resource)
 
     def fullUrl(self, resource):
@@ -432,34 +433,48 @@ class VSDConnecter:
         else:
             return itemlist
 
-
-
-    def iterateAllPaginated(self, resource, model = dict, fullDownload =False):
+    def iteratePageItems(self, page, func = dict):
         """
         returns all items as list
 
         :param str resource: resource path
-        :param model: function for converting resource
+        :param func: function for converting resource
+        :return: iterator of items
+        :rtype: list of dict or model object
+        """
+
+        for item in page.items:
+            yield func(**item)
+
+        if page.nextPageUrl:
+            res = self.getRequest(page.nextPageUrl)
+            nextPage = APIPagination(**res)
+            for nextItem in self.iteratePageItems(nextPage, func=func):
+                yield nextItem
+
+
+    def iterateAllPaginated(self, resource, func=dict):
+        """
+        returns all items as list
+
+        :param str resource: resource path
+        :param func: function for converting resource
         :return: iterator of items
         :rtype: list of dict or model object
         """
 
         res = self.getRequest(resource)
         page = APIPagination(**res)
-        for item in page.items:
-            if fullDownload:
-                item = self.getRequest(item['selfUrl'])
-            yield model(**item)
+        for item in self.iteratePageItems(page, func):
+            yield  item
 
-        if page.nextPageUrl:
-            for nextItem in self.iterateAllPaginated(page.nextPageUrl, model=model, fullDownload= fullDownload):
-                yield nextItem
+
 
     def getObjects(self, idList=None):
         if idList is None:
             idList = ''
         if idList in ['', 'published', 'unpublished']:
-            return self.iterateAllPaginated('objects/%s' % idList, model= self.createAPIObject)
+            return self.iterateAllPaginated('objects/%s' % idList, func=self.createAPIObject)
 
         items = []
         for curId in idList:

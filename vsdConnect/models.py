@@ -31,6 +31,10 @@ class APIFile(APIBasic):
     anonymizedFileHashCode = fields.StringField()
     size = fields.IntField()
     fileHashCode = fields.StringField()
+    objects = fields.EmbeddedField(APIPagination) #ObjectPagination
+
+class FilePagination(APIPagination):
+    items = fields.ListField(APIFile)
 
 class APIObjectType(APIBasic):
     displayName = fields.StringField()
@@ -86,6 +90,9 @@ class RawImage(APIObject):
     rawImage = fields.EmbeddedField(dict)
 
 class SurfaceModel(APIObject):
+    pass
+
+class Subject(APIObject):
     pass
 
 class SegmentationImage(APIObject):
