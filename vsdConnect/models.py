@@ -75,8 +75,8 @@ class APIFolder(APIBasic):
     level = fields.IntField()
     parentFolder = fields.EmbeddedField(APIBasic)
     childFolders = fields.ListField([ 'APIFolder'])
-    folderGroupRights = fields.StringField()
-    folderUserRights = fields.StringField()
+    folderGroupRights = fields.ListField(APIBasic)
+    folderUserRights = fields.ListField(APIBasic)
     containedObjects = fields.ListField(APIBasic)
 
 class FolderPagination(APIPagination):
