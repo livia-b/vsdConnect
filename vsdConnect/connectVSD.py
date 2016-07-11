@@ -217,7 +217,12 @@ class VSDConnecter:
         """
 
         token = False
-        res = self._get(self.url + 'tokens/jwt', auth = (self.username, self.password), verify = False)
+        for i in range(3):
+        	res = self.s.get(self.url + 'tokens/jwt', auth = (self.username, self.password), verify = False)
+                if res.status_code  == 200:
+                    res = res.json()
+                    break
+
         token = APIToken()
         token.set(obj = res)
         try:
