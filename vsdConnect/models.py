@@ -36,6 +36,11 @@ class APIFile(APIBasic):
 class FilePagination(APIPagination):
     items = fields.ListField(APIFile)
 
+class APIPreview(APIBasic):
+    imageUrl = fieldURL()
+    thumbnailUrl = fieldURL()
+    id = fields.IntField()
+
 class APIObjectType(APIBasic):
     displayName = fields.StringField()
     name = fields.StringField()
@@ -48,7 +53,7 @@ class APIObject(APIBasic):
     description  = fields.StringField()
     objectGroupRights = fields.ListField(APIBasic)
     objectUserRights = fields.StringField()
-    objectPreviews = fields.ListField(APIBasic)
+    objectPreviews = fields.ListField(APIPreview)
     createdDate = fields.StringField()
     modality = fields.StringField()
     ontologyItems = fields.EmbeddedField(APIPagination)
@@ -75,8 +80,8 @@ class APIFolder(APIBasic):
     level = fields.IntField()
     parentFolder = fields.EmbeddedField(APIBasic)
     childFolders = fields.ListField([ 'APIFolder'])
-    folderGroupRights = fields.ListField(APIBasic)
-    folderUserRights = fields.ListField(APIBasic)
+    folderGroupRights = fields.StringField()
+    folderUserRights = fields.StringField()
     containedObjects = fields.ListField(APIBasic)
 
 class FolderPagination(APIPagination):

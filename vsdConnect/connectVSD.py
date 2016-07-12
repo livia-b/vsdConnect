@@ -217,12 +217,7 @@ class VSDConnecter:
         """
 
         token = False
-        for i in range(3):
-        	res = self.s.get(self.url + 'tokens/jwt', auth = (self.username, self.password), verify = False)
-                if res.status_code  == 200:
-                    res = res.json()
-                    break
-
+        res = self._get(self.url + 'tokens/jwt', auth = (self.username, self.password), verify = False)
         token = APIToken()
         token.set(obj = res)
         try:
@@ -238,12 +233,12 @@ class VSDConnecter:
     ################################################
     
     def _download(self, url, filename):
-        r = urlparse.urlparse(url)
-        res = self._get(r.geturl(),params= r.params, stream = True)
+        r = urlparse(url)
+        res = self.s.get(r.geturl(),params= r.params, stream = True)
         with open(filename, 'wb') as f:
             for chunk in res.iter_content(1024):
                 f.write(chunk)
-                res = self._get(self.fullUrl(url), stream = True)
+                #res = self.s.get(self.fullUrl(url), stream = True)
         # if res.ok:
         #     with fp.open('wb') as f:
         #         shutil.copyfileobj(res.raw, f)
@@ -323,8 +318,11 @@ class VSDConnecter:
         return objType(**response)
 
     def parseUrl(self,resource, type):
-        if isinstance(resource, int):
-            resource = "%s/%s" %(type, resource)
+        try:
+            rId = int(resource)
+            resource = "%s/%s" %(type, rId)
+        except:
+            pass
         assert type in resource
         return self.fullUrl(resource)
 
@@ -1402,7 +1400,7 @@ class VSDConnecter:
         folder = APIFolder()
         if parent is None:
             parent = self.getFolderByName('MyProjects',mode='exact')
-        folder.parentFolder = APIFolder(selfUrl=parent.selfUrl)
+        folder.parentFolder = APIBasic(selfUrl=parent.selfUrl)
         folder.name = name
 
         exists = False
@@ -1419,9 +1417,19 @@ class VSDConnecter:
                     else:
                         print('unexpected error, folder exists but cannot be retrieved')
                         exists = True
-
+        data= {'folderUserRights': None, 'folderGroupRights': None, 'name': 'yetanothertest4',
+         'selfUrl': None, 'level': None, 'childFolders': None, 'containedObjects': None,
+         'parentFolder': {'selfUrl': u'https://demo.virtualskeleton.ch/api/folders/13'},
+         'id': None}
+        print(self.s.post(self.fullUrl('folders'), json = data))
+        #print(self.postRequest('folders', data = data))
         if not exists:
-            res = self.postRequest('folders', data = folder.to_struct())
+            data = folder.to_struct()
+            for name, field in folder:
+                if name not in data:
+                    data[name] = None
+            print(data)
+            res = self.postRequest('folders', data = data)
             folder.populate(**res)
             print('folder {0} created, has id {1}'.format(name, folder.id))
             return folder
@@ -1485,10 +1493,7 @@ class VSDConnecter:
 
         try:
             req = self._put(self.fullUrl(resource), json = data)
-            if req.status_code == requests.codes.ok:
-                return req.json()
-            else:
-                return None
+            return req
         except requests.exceptions.RequestException as err:
             print('request failed:',err)
             return None
@@ -1552,7 +1557,7 @@ class VSDConnecter:
 
         folder.containedObjects = None
 
-        res = self.putRequest('folders', data = folder.get())
+        res = self.putRequest('folders', data = folder.to_struct())
 
 
     def postObjectRights(self, obj, group, perms, isuser = False):
