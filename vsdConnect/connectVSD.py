@@ -48,7 +48,7 @@ try:
 except:
     import xml.etree.ElementTree as ET
 
-from models import * #APIObject, APIPagination, APIBasic, APIFolder, APIFile, APIToken
+from .models import * #APIObject, APIPagination, APIBasic, APIFolder, APIFile, APIToken
 import logging
 
 logger = logging.getLogger(__name__)
@@ -486,7 +486,7 @@ class VSDConnecter:
         except:
             if resourcetype == 'objects':
                 return self.createAPIObject(res)
-            model = models.resourceTypes[resourcetype](**res)
+            model = resourceTypes[resourcetype](**res)
             return model
 
     def getObject(self, resource):

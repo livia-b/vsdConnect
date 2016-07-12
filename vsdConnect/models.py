@@ -1,5 +1,7 @@
 from jsonmodels import models, fields, errors, validators
 
+
+
 ################################################
 #JWT token
 ################################################
@@ -54,20 +56,39 @@ class APIObjectType(APIBasic):
     name = fields.StringField()
     displayNameShort = fields.StringField()
 
+
+class APIObjectUserRight(APIBasic):
+    pass
+
+class APIObjectGroupRight(APIBasic):
+    pass
+
+class APILicense(APIBasic):
+    pass
+
+class APIObjectRight(APIBasic):
+    pass
+
+class APIGroup(APIBasic):
+    pass
+
+class APIUser(APIBasic):
+    pass
+
 class APIObject(APIBasic):
     id = fields.IntField()
     name = fields.StringField()
     type = fields.EmbeddedField(APIObjectType)
     description  = fields.StringField()
-    objectGroupRights = fields.ListField(APIBasic)
-    objectUserRights = fields.StringField()
+    objectGroupRights = fields.ListField(APIObjectGroupRight)
+    objectUserRights = fields.ListField(APIObjectUserRight)
     objectPreviews = fields.ListField(APIPreview)
     createdDate = fields.StringField()
     modality = fields.StringField()
     ontologyItems = fields.EmbeddedField(APIPagination)
     ontologyItemRelations = fields.EmbeddedField(APIPagination)
     ontologyCount = fields.IntField()
-    license = fields.StringField()
+    license = fields.EmbeddedField(APILicense)
     files = fields.EmbeddedField(APIPagination)
     linkedObjects = fields.EmbeddedField('ObjectPagination')
     linkedObjectRelations = fields.EmbeddedField(APIPagination)
@@ -95,11 +116,6 @@ class APIFolder(APIBasic):
 class FolderPagination(APIPagination):
     items = fields.ListField(APIFolder)
 
-class APIObjectUserRight(APIBasic):
-    pass
-
-class APIObjectGroupRight(APIBasic):
-    pass
 
 class APIObjectOntology(APIBasic):
     pass
@@ -110,25 +126,23 @@ class APIModality(APIBasic):
 class APIOntology(APIBasic):
     pass
 
-class APILicense(APIBasic):
-    pass
+###############################
+# API url dictionary
+############################
+resourceTypes = {
+    'files': APIFile,
+    'folders': APIFolder,
+    'objects': APIObject,
+    'object-links' : APIObjectLink
+}
 
-class APIObjectRight(APIBasic):
-    pass
 
-class APIGroup(APIBasic):
-    pass
-
-class APIUser(APIBasic):
-    pass
 ##########################################
 # Object types
 ##########################################
 class RawImage(APIObject):
     rawImage = fields.EmbeddedField(dict) #{u'sliceThickness': None, u'kilovoltPeak': None, u'spaceBetweenSlices': None, u'modality': {u'description': u'White Matter Probabilistic Map', u'id': 39, u'selfUrl': u'https://demo.virtualskeleton.ch/api/modalities/39', u'name': u'MR_WM_prob'}}
 
-class RawImage(APIObject):
-    rawImage = fields.EmbeddedField(dict)
 
 class SurfaceModel(APIObject):
     pass
@@ -147,16 +161,6 @@ class ClinicalStudyData(APIObject):
 
 class StatisticalModel(APIObject):
     pass
-
-###############################
-# API url dictionary
-############################
-resourceTypes = {
-    'files': APIFile,
-    'folders': APIFolder,
-    'objects': APIObject,
-    'object-links' : APIObjectLink
-}
 
 
 
