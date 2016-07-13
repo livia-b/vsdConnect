@@ -4,13 +4,13 @@
 INFOS
 =======
 * connectVSD 0.8.1
-* python version: 3 
+* python version: 3
 * @author: Michael Kistler 2015
 
 ========
 CHANGES
 ========
-* changed / added JwT auth 
+* changed / added JwT auth
 * object-types added
 
 """
@@ -22,7 +22,7 @@ import sys
 import math
 import hashlib
 
-from datetime import datetime 
+from datetime import datetime
 from calendar import timegm
 
 if sys.version_info >= (3, 0):
@@ -35,15 +35,16 @@ import urllib
 import jwt
 if PYTHON3:
     from urllib.parse import urlparse
-    from urllib.parse import quote
+    from urllib.parse import quote as urlparse_quote
 else:
     from urlparse import urlparse
-    from urllib import quote
+    from urllib import quote as urlparse_quote
+
 import json
 import getpass
-from pathlib import Path, PurePath, WindowsPath
+if PYTHON3:
+    from pathlib import Path, PurePath, WindowsPath
 import requests
-import logging
 from requests.auth import AuthBase
 
 import io
@@ -62,19 +63,6 @@ except:
 
 requests.packages.urllib3.disable_warnings()
 
-def statusDescription(res):
-    """
-    Simple wrapping around status_codes dictionary
-
-    :param res: status code
-    :type res: int
-    :return: status description
-    :rtype: str
-    """
-    if isinstance(res,int):
-        return requests.status_codes._codes[res][0]
-
-
 class SAMLAuth(AuthBase):
     """Attaches SMAL to the given Request object. extends the request package auth class"""
     def __init__(self, enctoken):
@@ -86,13 +74,13 @@ class SAMLAuth(AuthBase):
         return r
 
 def samltoken(fp, stsurl = 'https://ciam-dev-chic.custodix.com/sts/services/STS'):
-    """ 
-    generates the saml auth token from a credentials file 
+    """
+    generates the saml auth token from a credentials file
 
     :param Path fp: file with the credentials (xml file)
     :param str stsurl: url to the STS authority
     :return: enctoken - the encoded token
-    :rtype: byte 
+    :rtype: byte
     """
 
     if fp.is_file():
@@ -131,17 +119,17 @@ class JWTAuth(AuthBase):
         r.headers['Authorization'] = 'Bearer ' + self.enctoken
         return r
 
-               
+
 
 class VSDConnecter:
     __APIURL='https://demo.virtualskeleton.ch/api/'
 
     def __init__(
-        self, 
+        self,
         authtype = 'jwt',
         url = "https://demo.virtualskeleton.ch/api/",
-        username = "demo@virtualskeleton.ch", 
-        password = "demo", 
+        username = "demo@virtualskeleton.ch",
+        password = "demo",
         version = "",
         token = None,
         ):
@@ -159,7 +147,6 @@ class VSDConnecter:
 
 
         if authtype == 'basic':
-            logging.debug("authtype basic")
             self.username = username
             self.password = password
             self.s.auth = (self.username, self.password)
@@ -174,15 +161,15 @@ class VSDConnecter:
             token = self.getJWTtoken()
             self.token = token.tokenValue
             self.s.auth = JWTAuth(self.token)
-        
-           
 
-    
+
+
+
     def _httpResponseCheck(self, response):
         """
-        check the response of a request call to the resouce. 
+        check the response of a request call to the resouce.
         """
-        
+
         try:
             response.raise_for_status()
             return True, response.status_code
@@ -198,7 +185,7 @@ class VSDConnecter:
         :rtype: bool
         :raises:  DecodeError
         """
-        now = timegm(datetime.utcnow().utctimetuple()) 
+        now = timegm(datetime.utcnow().utctimetuple())
 
         if self.authtype == 'jwt':
             payload = jwt.decode(self.token, verify = False)
@@ -225,7 +212,7 @@ class VSDConnecter:
         if not self._validate_exp():
             self.s.auth = JWTAuth(self.getJWTtoken().tokenValue)
 
- 
+
     def getJWTtoken(self):
         """
         request the JWT token from the server using Basic Auth
@@ -238,7 +225,7 @@ class VSDConnecter:
         res = requests.get(self.url + 'tokens/jwt', auth = (self.username, self.password), verify = False)
 
         if self._httpResponseCheck(res)[0]:
-            
+
             token = APIToken()
             token.set(obj = res.json())
             try:
@@ -251,7 +238,7 @@ class VSDConnecter:
 
     def getAPIObjectType(self, response):
         """
-        create an APIObject depending on the type 
+        create an APIObject depending on the type
 
         :param json response: object data
         :return: object
@@ -259,47 +246,46 @@ class VSDConnecter:
         """
         apiObject = APIObject()
         apiObject.set(obj = response)
-        if apiObject.type == 1:
+        objectType = APIObjectType()
+        objectType.set(obj = apiObject.type)
+
+        if objectType.name == 'RawImage':
             obj = APIObjectRaw()
-        elif apiObject.type == 2:
+        elif objectType.name == 'SegmentationImage':
             obj = APIObjectSeg()
-        elif apiObject.type == 3:
+        elif objectType.name == 'StatisticalModel':
             obj = APIObjectSm()
-        elif apiObject.type == 4:
+        elif objectType.name == 'ClinicalStudyDefinition':
             obj = APIObjectCtDef()
-        elif apiObject.type == 5:
+        elif objectType.name == 'ClinicalStudyData':
             obj = APIObjectCtData()
-        elif apiObject.type == 6:
+        elif objectType.name == 'SurfaceModel':
             obj = APIObjectSurfModel()
-        elif apiObject.type == 7:
+        elif objectType.name == 'GenomicPlatform':
             obj = APIObjectGenPlatform()
-        elif apiObject.type == 8:
+        elif objectType.name == 'GenomicSample':
             obj = APIObjectGenSample()
-        elif apiObject.type == 9:
+        elif objectType.name == 'GenomicSeries':
             obj = APIObjectGenSeries()
-        elif apiObject.type == 10:
+        elif objectType.name == 'Study':
             obj = APIObjectStudy()
-        elif apiObject.type == 11:
+        elif objectType.name == 'Subject':
             obj = APIObjectSubject()
+        elif objectType.name == 'Plain':
+            obj = APIObject()
+        elif objectType.name == 'PlainSubject':
+            obj = APIObject()
         else:
             obj = APIObject()
         return obj
 
-    def getAPIObjectType2(self, resource):
-        """
-        TODO
-        get the API object types based on the selfUrl
-
-        :param str resource: the resource url of the object_type
-
-        """
 
     def fullUrl(self, resource):
         """
-        check if resource is selfUrl or relative path. a correct full path will be returned 
-        
+        check if resource is selfUrl or relative path. a correct full path will be returned
+
         :param str resource: the api resource path
-        :return: the full resource path 
+        :return: the full resource path
         :rtype: str
         """
         res = urlparse(str(resource))
@@ -322,12 +308,12 @@ class VSDConnecter:
 
         self._stayAlive()
 
-        try: 
+        try:
             res = self.s.options(self.fullUrl(resource))
             if self._httpResponseCheck(res):
                 if res.status_code == requests.codes.ok:
                     return res.json()
-                else: 
+                else:
                     return None
         except requests.exceptions.RequestException as err:
             print('option request failed:', err)
@@ -344,22 +330,19 @@ class VSDConnecter:
         :return: list of objects or None
         :rtype: json or None
         """
-      
+
         params = dict([('rpp', rpp),('page', page),('include', include)])
 
-   
         self._stayAlive()
-        try:
 
-            logging.debug("get(%s, params = %s)" %(self.fullUrl(resource), params))
+        try:
 
             res = self.s.get(self.fullUrl(resource), params = params)
 
             if self._httpResponseCheck(res):
                 if res.status_code == requests.codes.ok:
                     return res.json()
-                else: 
-                    logging.warning("getRequest %s failed: %s [%s]" %(resource, res, statusDescription(res.status_code) ))
+                else:
                     return None
         except requests.exceptions.RequestException as err:
             print('request failed:', err)
@@ -370,7 +353,7 @@ class VSDConnecter:
         download the zipfile into the given file (fp)
 
         :param str resource: download URL
-        :param Path fp:  filepath 
+        :param Path fp:  filepath
         :return: None or status_code ok (200)
         :rtype: int
         """
@@ -380,7 +363,7 @@ class VSDConnecter:
         res = self.s.get(self.fullUrl(resource), stream = True)
         if res.ok:
             with fp.open('wb') as f:
-                shutil.copyfileobj(res.raw, f) 
+                shutil.copyfileobj(res.raw, f)
             return res.status_code
         else:
             return None
@@ -390,11 +373,11 @@ class VSDConnecter:
         download the object into a ZIP file based on the object name and the working directory
 
         :param APIObject obj: object
-        :param Path wp: workpath, where to store the zip 
+        :param Path wp: workpath, where to store the zip
         :return: None or filename
         :rtype: str
         """
-        
+
         self._stayAlive()
 
         fp = Path(obj.name).with_suffix('.zip')
@@ -404,7 +387,7 @@ class VSDConnecter:
         res = self.s.get(self.fullUrl(obj.downloadUrl), stream = True)
         if res.ok:
             with fp.open('wb') as f:
-                shutil.copyfileobj(res.raw, f) 
+                shutil.copyfileobj(res.raw, f)
             return fp
         else:
             return None
@@ -412,7 +395,7 @@ class VSDConnecter:
 
     def removeLinks(self, resource):
         """
-        removes all related item from an object 
+        removes all related item from an object
 
         :param str resource: resouce path url
         :return: True if successful or False if failed
@@ -427,9 +410,23 @@ class VSDConnecter:
         else:
             print('nothing to delete, no links available')
 
+    def getPaginated(self, resource):
+        """ 
+        get paginated object
+        """
+        res = self.getRequest(resource)
+        if res:
+            page = APIPagination()
+            page.set(obj = res)
+
+        else:
+            page = None
+
+        return page
+
     def getAllPaginated(self, resource, itemlist = list()):
         """
-        returns all items as list 
+        returns all items as list
 
         :param str rource: resource path
         :param list itemlist: list of items
@@ -447,11 +444,11 @@ class VSDConnecter:
                 return self.getAllPaginated(page.nextPageUrl, itemlist = itemlist)
             else:
                 return itemlist
-        else: 
+        else:
             return itemlist
 
     def getOID(self, selfURL):
-        """ 
+        """
         extracts the last part of the selfURL, tests if it is a number
 
         :param selfURL: (str) url to the object
@@ -460,27 +457,29 @@ class VSDConnecter:
         """
 
         selfURL_path = urllib.parse.urlsplit(selfURL).path
-        oID = Path(selfURL_path).name
+        if PYTHON3:
+            oID = Path(selfURL_path).name
+        else:
+            oID = os.path.basename(selfURL_path)
 
-        try: 
+        try:
             r = int(oID)
         except ValueError as err:
             print('no object ID in the selfUrl {0}. Reason: {1}'.format(selfURL,err))
             r = None
         return r
-    
+
     def getObject(self, resource):
         """retrieve an object based on the objectID
 
         :param int,str resource: (str) selfUrl of the object or the (int) object ID
-        :return: the object 
+        :return: the object
         :rtype: APIObject
         """
         if isinstance(resource, int):
             resource = 'objects/' + str(resource)
 
         res = self.getRequest(resource)
-        logging.debug("getObject %s : %s" %(resource, res))
         if res:
             obj = self.getAPIObjectType(res)
             obj.set(obj = res)
@@ -490,14 +489,14 @@ class VSDConnecter:
 
     def putObject(self, obj):
         """update an objects information
-    
+
         :param APIObject obj: an APIObject
         :return: the updated object
         :rtype: APIObject
         """
 
         res = self.putRequest(obj.selfUrl, data = obj.get())
-        
+
         if res:
             obj = self.getAPIObjectType(res)
             obj.set(obj = res)
@@ -509,7 +508,7 @@ class VSDConnecter:
         """retrieve an folder based on the folderID
 
         :param int,str resource: (str) selfUrl of the folder or the (int) folder ID
-        :return: the folder 
+        :return: the folder
         :rtype: APIFolder
         """
         if isinstance(resource, int):
@@ -524,31 +523,31 @@ class VSDConnecter:
         else:
             return res
 
-        
+
     def postRequest(self, resource, data):
         """add data to an object
 
         :param str resource: relative path of the resource or selfUrl
         :param json data: data to be added to the resource
-        :return: the resource object 
+        :return: the resource object
         :rtype: json
         :raises: RequestException
         """
 
         self._stayAlive()
 
-        try:    
+        try:
             req = self.s.post(self.fullUrl(resource), json = data)
             print('status code:', req.status_code)
             #if req.status_code == requests.codes.created:
-                return req.json()
+            return req.json()
         except requests.exceptions.RequestException as err:
             print('request failed:',err)
             return None
-  
+
 
     def putRequest(self, resource, data):
-        """ update data of an object 
+        """ update data of an object
 
         :param str resource: defines the relative path to the api resource
         :param json data: data to be added to the object
@@ -558,38 +557,37 @@ class VSDConnecter:
 
         self._stayAlive()
 
-        try:    
+        try:
             req = self.s.put(self.fullUrl(resource), json = data)
             if req.status_code == requests.codes.ok:
                 return req.json()
-            else: 
+            else:
                 return None
         except requests.exceptions.RequestException as err:
             print('request failed:',err)
             return None
-       
+
 
     def postRequestSimple(self, resource):
         """
-        post (create) a resource 
+        post (create) a resource
 
         :param str resource: resource path
-        :return: the resource object 
+        :return: the resource object
         :rtype: json
         """
 
         self._stayAlive()
 
         req = self.s.post(self.fullUrl(resource))
-        logging.debug(req)
         return req.json()
 
     def putRequestSimple(self, resource):
         """
-        put (update) a resource 
+        put (update) a resource
 
         :param str resource: resource path
-        :return: the resource object 
+        :return: the resource object
         :rtype: json
         """
 
@@ -599,7 +597,7 @@ class VSDConnecter:
         return req.json()
 
     def delRequest(self, resource):
-        """ 
+        """
         generic delete request
 
         :param str resource: resource path
@@ -607,7 +605,7 @@ class VSDConnecter:
         :rtype: int
         """
 
-        try: 
+        try:
             req = self.s.delete(self.fullUrl(resource))
             if req.status_code == requests.codes.ok:
                 print('resource {0} deleted, 200'.format(self.fullUrl(resource)))
@@ -621,18 +619,18 @@ class VSDConnecter:
 
         except requests.exceptions.RequestException as err:
             print('del request failed:',err)
-            return 
+            return
 
     def delObject(self, obj):
         """
-        delete an unvalidated object 
+        delete an unvalidated object
 
         :param APIObject obj: the object to delete
         :return: status_code
         :rtype: int
         """
 
-        try: 
+        try:
             req = self.s.delete(obj.selfUrl)
             if req.status_code == requests.codes.ok:
                 print('object {0} deleted'.format(obj.id))
@@ -647,14 +645,14 @@ class VSDConnecter:
 
     def publishObject(self, obj):
         """
-        publisch an unvalidated object 
+        publisch an unvalidated object
 
         :param APIObject obj: the object to publish
         :return: returns the object
         :rtype: APIObject
         """
 
-        try: 
+        try:
             req = self.s.put(obj.selfUrl + '/publish')
             if req.status_code == requests.codes.ok:
                 print('object {0} published'.format(obj.id))
@@ -663,7 +661,7 @@ class VSDConnecter:
 
         except requests.exceptions.RequestException as err:
             print('publish request failed:',err)
-        
+
 
 
     def getObjectFilesHash(self, obj):
@@ -678,10 +676,10 @@ class VSDConnecter:
         filehash = list()
 
         files = self.getObjectFiles(obj)
-        
+
         for f in files:
             filehash.append(f.fileHashCode)
-        
+
         return filehash
 
     def checkFileInObject(self, obj, fp):
@@ -698,7 +696,7 @@ class VSDConnecter:
         ## Haso of all files
         filehash = self.getObjectFilesHash(obj)
 
-        ## Local hash 
+        ## Local hash
         BLOCKSIZE = 65536
         hasher = hashlib.sha1()
 
@@ -708,25 +706,25 @@ class VSDConnecter:
                 hasher.update(buf)
                 buf = afile.read(BLOCKSIZE)
         localhash = hasher.hexdigest()
-        
+
         if localhash.upper() in filehash:
             containted = True
-            
+
         return containted
 
     def searchTerm(self, resource, search ,mode = 'default'):
         """ search a resource using oAuths
-    
+
         :param str resouce: resource path
-        :param str search: term to search for 
+        :param str search: term to search for
         :param str mode: search for partial match (default) or exact match (exact)
         :return: list of folder objects
         :rtype: json
         """
 
-        search = quote(search)
+        search = urlparse_quote(search)
         if mode == 'exact':
-            url = self.fullUrl(resource) + '?$filter=Term%20eq%20%27{0}%27'.format(search) 
+            url = self.fullUrl(resource) + '?$filter=Term%20eq%20%27{0}%27'.format(search)
         else:
             url = self.fullUrl(resource) + '?$filter=startswith(Term,%27{0}%27)%20eq%20true'.format(search)
 
@@ -735,8 +733,8 @@ class VSDConnecter:
 
 
 
-    def uploadFile(self, filename, ret_response = False):
-        """ 
+    def uploadFile(self, filename):
+        """
         push (post) a file to the server
 
         :param Path filename: the file to be uploaded
@@ -745,31 +743,21 @@ class VSDConnecter:
         """
 
         try:
-            if isinstance(filename,str):
-                logging.warning('Converting string filename to path object')
-                filename = Path(filename)
             data = filename.open(mode = 'rb').read()
             ##workaround for file without file extensions
             if filename.suffix =='':
                 filename = filename.with_suffix('.dcm')
             files  = { 'file' : (str(filename.name), data)}
         except:
-            logging.error("opening file %s failed, aborting" %filename, exc_info= True)
+            print ("opening file", filename, "failed, aborting")
             return
 
         res = self.s.post(self.url + 'upload', files = files)
-##        if ret_response:
-##                return res
-        if res.status_code in [requests.codes.created, requests.codes.ok] :
-            result = res.json() # {file: {selfUrl: ...}, relatedObject: {selfUrl}}
-            res_file = {'selfUrl': result['file']['selfUrl']} # 'objects': [result['relatedObject']['selfUrl']] it's the second last in case of segmentations
-            if res.status_code == requests.codes.ok:
-                logging.warning('File was already present in %s' % Path(result['relatedObject']['selfUrl']).name )
-            #obj = APIFile()
-            obj = self.getAPIObjectType(res_file)
-            obj.set(obj = res_file)
+        if res.status_code == requests.codes.created:
+            obj = self.getAPIObjectType(res)
+            obj.set(obj = res)
             return obj
-        else: 
+        else:
             return res.status_code
 
 
@@ -790,7 +778,7 @@ class VSDConnecter:
                 yield(chunk)
 
     def chunkFileUpload(self, fp, chunksize = 1024*4096):
-        """ 
+        """
         upload large files in chunks of max 100 MB size
 
         :param Path fp: the file to upload
@@ -804,45 +792,40 @@ class VSDConnecter:
         maxchunksize = 1024 * 1024 * 100
         if chunksize < maxchunksize:
             for chunk in self.chunkedread(fp, chunksize):
-                attemptsLeft = 3
                 part = part + 1
                 print('uploading part {0} of {1}'.format(part,parts))
 
                 files  = { 'file' : (str(fp.name), chunk)}
-                while attemptsLeft >0:
-                    attemptsLeft += -1
-                    res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files = files)
-                    if res.status_code == requests.codes.ok:
-                        print('uploaded part {0} of {1}'.format(part,parts))
-                        attemptsLeft = 0
-                    else:
-                        err = True
-                        logging.warning("Error uploading file chunks: %s [attempts left %d]" %(statusDescription(res.status_code), attemptsLeft))
+                res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files = files)
+                if res.status_code == requests.codes.ok:
+                    print('uploaded part {0} of {1}'.format(part,parts))
+                else:
+                    err = True
+
             if not err:
-                res = None
                 resource = 'chunked_upload/commit?filename={0}'.format(fp.name)
                 res = self.postRequestSimple(resource)
-                
+
                 relObj = res['relatedObject']
                 obj = self.getObject(relObj['selfUrl'])
                 return obj
-                
+
             else:
-                return res
+                return None
         else:
             print('not uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, method))
             return None
- 
+
 
 
     def getFile(self, resource):
         """
         return a APIFile object
-        
+
         :param str resource: resource path
         :return: api file object  or status code
         :rtype: APIFile
-        """  
+        """
         if isinstance(resource, int):
             resource = 'files/{0}'.format(resource)
 
@@ -852,9 +835,9 @@ class VSDConnecter:
             fObj = APIFile()
             fObj.set(res)
             return fObj
-        else: 
+        else:
             return res
-  
+
 
 
     def getObjectFiles(self, obj):
@@ -863,14 +846,14 @@ class VSDConnecter:
 
         :param APIObject obj: object
         :return: list of APIFile
-        :rtype: list of APIFile 
+        :rtype: list of APIFile
         """
         filelist = list()
-       
+
         fileurl = 'objects/{0}/files'.format(obj.id)
-        
+
         fl = self.getAllPaginated(fileurl)
-        
+
         for f in fl:
             res = self.getFile(f['selfUrl'])
             if not isinstance(res, int):
@@ -878,7 +861,7 @@ class VSDConnecter:
         return filelist
 
     def fileObjectVersion(self, data):
-        """ 
+        """
         Extract VSDID and selfUrl of the related Object Version of the file after file upload
 
         :param json data: file object data
@@ -899,7 +882,7 @@ class VSDConnecter:
         :param str resource: resource path (eg nextPageUrl) or default groups
         :param int rpp: results per page
         :param int page: page to display
-        :return: list of objects 
+        :return: list of objects
         :rtype: APIObjects
         """
 
@@ -913,8 +896,8 @@ class VSDConnecter:
 
 
     def getLatestUnpublishedObject(self):
-        """ 
-        searches the list of unpublished objects and returns the newest object  
+        """
+        searches the list of unpublished objects and returns the newest object
 
         :return: last uploaded object
         :rtype: apiObject
@@ -925,28 +908,28 @@ class VSDConnecter:
         if len(res['items']) > 0:
             obj = self.getObject(res['items'][0].get('selfUrl'))
             return obj
-        else: 
+        else:
             print('you have no unpublished objects')
             return None
 
-   
-                
+
+
 
     def getFolderByName(self, search, mode = 'default'):
         """
         get a list of folder(s) based on a search string
 
-        :param str search: term to search for 
+        :param str search: term to search for
         :param str mode: search for partial match ('default') or exact match ('exact')
         :return: list of folder objects APIFolders
         :rtype: list of APIFolders
-        """   
-        
-        search = quote(search)
+        """
+
+        search = urlparse_quote(search)
 
         if mode == 'exact':
 
-            url = self.url + "folders?$filter=Name%20eq%20%27{0}%27".format(search) 
+            url = self.url + "folders?$filter=Name%20eq%20%27{0}%27".format(search)
 
         else:
 
@@ -1048,7 +1031,7 @@ class VSDConnecter:
 
     def getFolderContent(self, folder, recursive = False, mode = 'd'):
         """
-        get the objects and folder contained in the given folder. can be called recursive to travel and return all objects 
+        get the objects and folder contained in the given folder. can be called recursive to travel and return all objects
 
         :param APIFolder folder: the folder to be read
         :param bool recursive:  travel the folder structure recursively or not (default)
@@ -1056,10 +1039,10 @@ class VSDConnecter:
         :return content: dictionary with folders (APIFolder) and object (APIObjects)
         :rtype: dict of APIFolder and APIObject
         """
-         
+
         objectmode = False
-        foldermode = False 
-        
+        foldermode = False
+
         if mode == 'o':
             objectmode = True
 
@@ -1074,7 +1057,7 @@ class VSDConnecter:
 
 
         folders = self.getContainedFolders(folder)
-                    
+
         temp = dict([('folder', folder),('object', None)])
 
         if foldermode:
@@ -1100,10 +1083,10 @@ class VSDConnecter:
                     for fold in folders:
                         temp = dict([('folder', folder),('object', None)])
                         content.append(temp)
-        
+
         return content
-            
-            
+
+
 
 
     def searchOntologyTerm(self, search, oType = '0', mode = 'default'):
@@ -1113,12 +1096,12 @@ class VSDConnecter:
         :param str search: string to be searched
         :param int oType: ontlogy resouce code, default is FMA (0)
         :param str mode: find exact term (exact) or partial match (default)
-        :returns: a list of ontology objects or a single ontology item 
+        :returns: a list of ontology objects or a single ontology item
         :rtype: APIOntolgy
         """
-        search = quote(search)
+        search = urlparse_quote(search)
         if mode == 'exact':
-            url = self.url+"ontologies/{0}?$filter=Term%20eq%20%27{1}%27".format(oType,search) 
+            url = self.url+"ontologies/{0}?$filter=Term%20eq%20%27{1}%27".format(oType,search)
         else:
             url = self.url+"ontologies/{0}?$filter=startswith(Term,%27{1}%27)%20eq%20true".format(oType,search)
 
@@ -1128,7 +1111,7 @@ class VSDConnecter:
         res = self.s.get(url)
         if res.status_code == requests.codes.ok:
             result = list()
-            
+
             res = res.json()
 
             if len(res['items']) == 1:
@@ -1145,7 +1128,7 @@ class VSDConnecter:
             return res.status_code
 
 
-        
+
     def getOntologyTermByID(self, oid, oType = 0):
         """
         Retrieve an ontology entry based on the IRI
@@ -1153,7 +1136,7 @@ class VSDConnecter:
         :param int oid: Identifier of the entry
         :param int oType: Resource type, available resources can be found using the OPTIONS on /api/ontologies). Default resouce is FMA (0)
         :return: ontology term entry
-        :rtype: json 
+        :rtype: json
         """
 
         self._stayAlive()
@@ -1166,7 +1149,7 @@ class VSDConnecter:
     def getOntologyItem(self, resource, oType = 0):
         """
         Retrieve an ontology item object (APIOntology)
-        
+
         :param int,str resource: resource path to the of the ontology item
         :param int oType: ontology type
         :return onto: the ontology item object
@@ -1177,13 +1160,13 @@ class VSDConnecter:
 
         if isinstance(resource, int):
             resource = 'ontology/{0}/{1}'.format(resource, oType)
-        
+
         res = self.getRequest(resource)
 
         if res:
             onto = APIOntology()
             onto.set(obj = res)
-        
+
             return onto
         else:
             return None
@@ -1192,7 +1175,7 @@ class VSDConnecter:
     def getLicenseList(self):
         """ retrieve a list of the available licenses (APILicense)
 
-        
+
         :return: list of available license objects
         :rtype: list of APILicense
         """
@@ -1215,40 +1198,40 @@ class VSDConnecter:
         :return license: the license object
         :rtype: APILicense
         """
-        
+
         if isinstance(resource, int):
             resource = 'licenses/{0}'.format(resource)
-        
+
         res = self.getRequest(resource)
         if res:
             license = APILicense()
             license.set(obj = res)
-        
+
             return license
         else:
             return None
 
     def getObjectRightList(self):
-        """ retrieve a list of the available base object rights (APIObjectRight) 
-        
+        """ retrieve a list of the available base object rights (APIObjectRight)
+
         :return: list of object rights
         :rtype: list of APIObjectRight
         """
-        
+
         res = self.getRequest('object_rights')
         permission = list()
-        
+
         if res:
             for item in iter(res['items']):
                 perm = APIObjectRight()
                 perm.set(obj = item)
                 permission.append(perm)
-        
+
         return permission
 
     def getObjectRight(self, resource):
-        """ retrieve a  object rights object (APIObjectRight) 
-        
+        """ retrieve a  object rights object (APIObjectRight)
+
         :param int,str resource: resource to the permission id (int) or selfurl (str)
         :return: perm object
         :rtype: APIObjectRight
@@ -1271,7 +1254,7 @@ class VSDConnecter:
         :param str resource: resource path (eg nextPageUrl) or default groups
         :param int rpp: results per page
         :param int page: page number to display
-        :return: list of group objects 
+        :return: list of group objects
         :rtype: APIGroup
         :return: pagination object
         :rtype: APIPagination
@@ -1300,9 +1283,9 @@ class VSDConnecter:
 
         if isinstance(resource, int):
             resource = 'groups/{0}'.format(resource)
-        
+
         res = self.getRequest(resource)
-        
+
         if res:
             group = APIGroup()
             group.set(obj = res)
@@ -1322,7 +1305,7 @@ class VSDConnecter:
             resource = 'users/{0}'.format(resource)
 
         res = self.getRequest(resource)
-        
+
         if res:
             user = APIUser()
             user.set(obj = res)
@@ -1336,7 +1319,7 @@ class VSDConnecter:
 
         :param str permset: name of the permission set: available are private, protect, default, collaborate, full or a list of permission ids (list)
         :return perms: list of object rights objects
-        :rtype: APIObjectRight 
+        :rtype: APIObjectRight
         """
 
         if permset == 'private':
@@ -1345,9 +1328,9 @@ class VSDConnecter:
             lperms = list([2,3])
         elif permset == 'default':
             lperms = list([2,3,4])
-        elif permset == 'collaborate': 
+        elif permset == 'collaborate':
             lperms = list([2,3,4,5])
-        elif permset == 'full': 
+        elif permset == 'full':
             lperms = list([2,3,4,5,6])
         else:
             lperms = permset
@@ -1362,7 +1345,7 @@ class VSDConnecter:
         """
         get the list of attaced group rights of an object
 
-        :param APIObject obj: the object 
+        :param APIObject obj: the object
         :return rights: a list of ObjectGroupRights
         :rtype: list of APIObjectGroupRight
         """
@@ -1383,7 +1366,7 @@ class VSDConnecter:
         """
         get the list of attaced user rights of an object
 
-        :param APIObject obj: the object 
+        :param APIObject obj: the object
         :return: a list of ObjectUserRights
         :rtype: list APIObjectUserRight
         """
@@ -1404,16 +1387,16 @@ class VSDConnecter:
         translate a set of permissions and a group into the appropriate format and add it to the object
 
 
-        .. warning:: DEPRECATED: use postObjectGroupRights or postObjectUserRights! 
+        .. warning:: DEPRECATED: use postObjectGroupRights or postObjectUserRights!
 
 
-        :param APIObject obj: () the object you want to add the permissions to 
+        :param APIObject obj: () the object you want to add the permissions to
         :param APIGroup/APIUser group: group object or user object
         :param list perms: list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
-        :param bool isuser: set True if the groups variable is a user. Default is False 
+        :param bool isuser: set True if the groups variable is a user. Default is False
         :return: a group or user rights object
         :rtype: APIObjectGroupRight,APIObjectUserRight
-        """ 
+        """
 
         #creat the dict of rights
         rights = list()
@@ -1440,12 +1423,12 @@ class VSDConnecter:
     def postObjectUserRights(self, obj, user, perms):
         """ translate a set of permissions and a user into the appropriate format and add it to the object
 
-        :param APIObject obj: the object you want to add the permissions to 
+        :param APIObject obj: the object you want to add the permissions to
         :param APIUser user: user object
         :param list perms: list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
         :return: user rights object
         :rtype: APIObjectUserRight
-        """ 
+        """
 
         #creat the dict of rights
         rights = list()
@@ -1465,12 +1448,12 @@ class VSDConnecter:
     def postObjectGroupRights(self, obj, group, perms):
         """ translate a set of permissions and a group into the appropriate format and add it to the object
 
-        :param APIObject obj: the object you want to add the permissions to 
+        :param APIObject obj: the object you want to add the permissions to
         :param APIGroup group: group object
         :param list perms: list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
-        :return: group rights object  
+        :return: group rights object
         :rtype: APIObjectGroupRight
-        """ 
+        """
 
         #creat the dict of rights
         rights = list()
@@ -1492,7 +1475,7 @@ class VSDConnecter:
 
 
     def getModalityList(self):
-        """ 
+        """
         retrieve a list of modalities objects (APIModality)
 
         :return: list of available modalities
@@ -1506,7 +1489,7 @@ class VSDConnecter:
                 modality = APIModality()
                 modality.set(obj = item)
                 modalities.append(modality)
-            return modalities
+        return modalities
 
     def getModality(self, resource):
         """ retrieve a modalities object (APIModality)
@@ -1516,19 +1499,18 @@ class VSDConnecter:
         :return: the modality object
         :rtype: APIModality
         """
-        
+
         if isinstance(resource, int):
             resource = 'modalities/{0}'.format(resource)
-        
+
         res = self.getRequest(resource)
         if res:
             mod = APIModality()
             mod.set(obj = res)
-        
+
             return mod
         else:
             return None
-
 
     def readFolders(self,folderList):
     #first pass: create one entry for each folder:
@@ -1539,7 +1521,7 @@ class VSDConnecter:
             folderHash[ID].ID=ID
             folderHash[ID].name=folder['name']
             folderHash[ID].childFolders=[]
-       
+
     #second pass: create references to parent and child folders
         for folder in folderList['items']:
             ID=folder['id']
@@ -1565,20 +1547,20 @@ class VSDConnecter:
 
         return folderHash
 
-            
-    def addLink(self, obj1, obj2):
-        """ add an object link 
 
-        :param APIBasic obj1: a linked object with selfUrl 
+    def addLink(self, obj1, obj2):
+        """ add an object link
+
+        :param APIBasic obj1: a linked object with selfUrl
         :param APIBasic obj2: a linked object with selfUrl
-        :return: the created object-link 
+        :return: the created object-link
         :rtype: json
         """
 
         link = APIObjectLink()
         link.object1 = dict([('selfUrl', obj1.selfUrl)])
         link.object2 = dict([('selfUrl', obj2.selfUrl)])
-        
+
         return  self.postRequest('object-links', data = link.get())
 
     def addOntologyToObject(self, obj, ontology, pos = 0):
@@ -1604,11 +1586,11 @@ class VSDConnecter:
                     isset = True
         else:
             print('position needs to be a number (int)')
-        
+
         return isset
 
     def postFolder(self, parent, name, check = True):
-        """ 
+        """
         creates the folder with a given name (name) inside a folder (parent) if not already exists
 
         :param APIFolder parent: the root folder
@@ -1617,7 +1599,7 @@ class VSDConnecter:
         :return: the folder object of the generated folder or the existing folder
         :rtype: APIFolder
         """
-         
+
         folder = APIFolder()
         folder.parentFolder = dict([('selfUrl', parent.selfUrl)])
         folder.name = name
@@ -1625,15 +1607,15 @@ class VSDConnecter:
         exists = False
 
         if check:
-        if parent.childFolders:
-            for child in parent.childFolders:
+            if parent.childFolders:
+                for child in parent.childFolders:
                     basic = APIBasic()
                     basic.set(obj = child)
                     fold = self.getFolder(basic.selfUrl)
                     if fold is not None:
-                if fold.name == name:
+                        if fold.name == name:
                             print('folder {0} already exists, id: {1}'.format(name, fold.id))
-                    exists = True
+                            exists = True
                     else:
                         print('unexpected error, folder exists but cannot be retrieved')
                         exists = True
@@ -1641,8 +1623,8 @@ class VSDConnecter:
         if not exists:
             res = self.postRequest('folders', data = folder.get())
             if res is not None:
-            folder.set(obj = res)
-            print('folder {0} created, has id {1}'.format(name, folder.id))
+                folder.set(obj = res)
+                print('folder {0} created, has id {1}'.format(name, folder.id))
             return folder
         else:
             return fold
@@ -1654,7 +1636,7 @@ class VSDConnecter:
         :return: True if deleted, False if not
         :rtype: bool
         """
-    
+
         state = False
         self.deleteFolderContent(folder)
         res = self.delRequest(folder.selfUrl)
@@ -1665,19 +1647,19 @@ class VSDConnecter:
             for f in folders:
                 return self.deleteFolder(f, recursive = recursive)
         return state
-    
+
     def createFolderStructure(self, rootfolder, filepath, parents):
-        """ 
-        creates the folders based on the filepath if not already existing, 
+        """
+        creates the folders based on the filepath if not already existing,
         starting from the rootfolder
 
         :param APIFolder rootfolder: the root folder object
         :param Path filepath: filepath of the file
-        :param int parents: number of partent levels to create from file folder 
+        :param int parents: number of partent levels to create from file folder
         :return: the last folder in the tree
         :rtype: APIFolder
         """
-         
+
         fp = filepath.resolve()
         folders = list(fp.parts)
         folders.reverse()
@@ -1685,7 +1667,7 @@ class VSDConnecter:
         ##remove file from list
         if fp.is_file():
            folders.remove(folders[0])
-            
+
         for i in range (parents, len(folders)):
             folders.remove(folders[i])
 
@@ -1710,12 +1692,12 @@ class VSDConnecter:
                    # f.toJson()
                     res = self.postRequest('folders', f.get())
                     fparent.set(obj = res)
-                    
+
                 else:
                     fparent = fchild
-                   
+
             return fparent
-        else: 
+        else:
             print('Root folder does not exist', rootfolder)
             #jData = jFolder(folder)
             return None
@@ -1725,16 +1707,16 @@ class VSDConnecter:
     def addObjectToFolder(self, target, obj):
         """
         add an object to the folder
-    
-        :param APIFolder target: the target folder 
+
+        :param APIFolder target: the target folder
         :param APIObject obj: the object to copy
         :return: updated folder
         :rtype: APIFolder
-        """    
+        """
 
         objSelfUrl = dict([('selfUrl',obj.selfUrl)])
         objects = target.containedObjects
-        
+
         if not objects:
             objects = list()
         if objects.count(objSelfUrl) == 0:
@@ -1747,7 +1729,6 @@ class VSDConnecter:
                 target.set(obj = res)
                 return target
             else:
-                logging.warning(res)
                 return res
         else:
             return target
@@ -1755,16 +1736,16 @@ class VSDConnecter:
     def removeObjectFromFolder(self, target, obj):
         """
         remove an object from the folder
-    
-        :param APIFolder target: the target folder 
+
+        :param APIFolder target: the target folder
         :param APIObject obj: the object to remove
         :return: updated folder
         :rtype: APIFolder
-        """  
+        """
 
         objSelfUrl = dict([('selfUrl',obj.selfUrl)])
         objects = target.containedObjects
-        
+
         isset = False
 
         if objects:
@@ -1790,7 +1771,7 @@ class VSDConnecter:
         """
 
         print('---------General Information ----------')
-        if obj.description is not None: 
+        if obj.description is not None:
             print('description:', obj.description)
         if obj.name is not None:
             print('name: ', obj.name)
@@ -1848,9 +1829,9 @@ class VSDConnecter:
                 print('rights:')
                 for r in u.relatedRights:
                     print(self.getObjectRight(r['selfUrl']).get())
-        else: 
+        else:
             print('nothing here')
-        
+
         print('---------GroupRights----------')
         gr = self.getObjectGroupRights(obj)
         if gr:
@@ -1861,15 +1842,15 @@ class VSDConnecter:
                 print('rights:')
                 for r in g.relatedRights:
                     print(self.getObjectRight(r['selfUrl']).get())
-        else: 
+        else:
             print('nothing here')
 
-        
+
 class APIBasic(object):
     """
     APIBasic
 
-    :attributes: 
+    :attributes:
         * selfUrl
     """
 
@@ -1880,17 +1861,17 @@ class APIBasic(object):
     def __init__(self, oKeys = oKeys):
         for v in oKeys:
                 setattr(self, v, None)
-        
+
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIBasic obj: A APIBasic object
         """
         if  obj:
             for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
+                if v in obj:
+                    setattr(self, v, obj[v])
         else:
             for v in self.oKeys:
                 setattr(self, v, None)
@@ -1907,17 +1888,16 @@ class APIObject(APIBasic):
     """
     API Object
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
         * objectUserRights
         * objectPreviews
         * createdDate
-        * modality
         * ontologyItems
         * ontologyItemRelations
         * ontologyCount
@@ -1926,7 +1906,7 @@ class APIObject(APIBasic):
         * linkedObjects
         * linkedObjectRelations
         * downloadUrl
-    """ 
+    """
 
     oKeys = list([
         'id',
@@ -1937,7 +1917,6 @@ class APIObject(APIBasic):
         'objectUserRights',
         'objectPreviews',
         'createdDate',
-        'modality',
         'ontologyItems',
         'ontologyItemRelations',
         'ontologyCount',
@@ -1952,10 +1931,10 @@ class APIObject(APIBasic):
         oKeys.append(__i)
 
     def __init__(self, ):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObject obj: A APIObject object
@@ -1970,22 +1949,107 @@ class APIObject(APIBasic):
         """prints the json to the console, nicely printed"""
         super(APIObject, self).show()
 
+    def download(self, apisession, wp):
+        """
+        download the object into a ZIP file based on the object name and the working directory
+
+        :param VSDConnecter apisession: authenticated api session
+        :param Path wp: workpath, where to store the zip
+        :return: None or filename
+        :rtype: str
+        """
+
+        fp = Path(self.name).with_suffix('.zip')
+        
+        if wp:
+            fp = Path(wp, fp)
+
+        res = apisession.s.get(self.downloadUrl, stream = True)
+        if res.ok:
+            with fp.open('wb') as f:
+                shutil.copyfileobj(res.raw, f)
+            return fp
+        else:
+            return None
+
+    def getType(self):
+        """return the type APIObjectType object of the class"""
+
+        otype = APIObjectType()
+        otype.set(obj = self.type)
+        
+        return otype
+
+    def getLicense(self):
+        """ return the license APILicence object"""
+
+        license = APILicense()
+        license.set(obj = self.license)
+
+        return license
+
+    def getUserRights(self, apisession):
+        """ return a list of object user rights objects
+
+        :param VSDConnecter apisession: authenticated api session to SMIR
+        :return: list of object userrights
+        :rtype: APIObjectUserRights
+        """
+        
+        rights = None
+
+        if self.objectUserRights:
+            rights = list()
+            for item in self.objectUserRights:
+                right = APIBasic()
+                right.set(obj = item)
+                res = apisession.getRequest(right.selfUrl)
+                uright = APIObjectUserRight()
+                uright.set(obj = res)
+                rights.append(uright)
+
+        return rights
+
+    def getGroupRights(self, apisession):
+        """return a list of group Rights objects 
+
+        :param VSDConnecter apisession: authenticated api session to SMIR
+        :return: list of object grouprights
+        :rtype: APIObjectGroupRights
+        """
+        
+        rights = None
+
+        if self.objectGroupRights:
+            rights = list()
+            for item in self.objectGroupRights:
+                right = APIBasic()
+                right.set(obj = item)
+                res = apisession.getRequest(right.selfUrl)
+                gright = APIObjectGroupRight()
+                gright.set(obj = res)
+                rights.append(gright)
+
+        return rights             
+
+    def previews(self):
+
+        print('todo')
 
 class APIObjectRaw(APIObject):
     """
     APIObjectRaw (Serie, Raw Images)
 
-     :attributes: 
+     :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
         * objectUserRights
         * objectPreviews
         * createdDate
-        * modality
         * ontologyItems
         * ontologyItemRelations
         * ontologyCount
@@ -1998,6 +2062,7 @@ class APIObjectRaw(APIObject):
         * sliceThickness
         * spaceBetweenSlices
         * kilovoltPeak
+        * modality
     """
     oKeys = list([
         'rawImage'
@@ -2007,7 +2072,7 @@ class APIObjectRaw(APIObject):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
         """ sets class variable for each key in the object to the keyname and its value
@@ -2024,21 +2089,60 @@ class APIObjectRaw(APIObject):
         """prints the json to the console, nicely printed"""
         super(APIObject, self).show()
 
+    def download(self, apisession, wp):
+        """ download the object as zip to a directory"""
+        return APIObject.download(self, apisession, wp)
+
+    def getType(self):
+        """return the type APIObjectType object of the class"""
+        return APIObject.getType(self)
+
+    def getLicense(self):
+        """ return the license APILicence object"""
+        return APIObject.getLicense(self)
+
+    def getMeta(self):
+        """return the meta infos of the object as object APIRawImage """
+
+        meta = APIRawImage()
+        meta.set(obj = self.rawImage)
+
+        return meta
+
+    def getUserRights(self, apisession):
+        """ return the user rights object """
+        return APIObject.getUserRights(self, apisession)
+
+    def getGroupRights(self, apisession):
+        """ return the group rights object """
+        return APIObject.getGroupRights(self, apisession)
+
+    def getModality(self):
+        """ get the modality of an object 
+
+        :return: the modality object
+        :rtype: APIModality
+        """
+        mod = APIModality()
+        mod.set(obj = self.getMeta().modality)
+
+        return mod
+
+
 class APIObjectSeg(APIObject):
     """
     APIObjectSeg (Segmentation objects)
-    
-    :attributes: 
+
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
         * objectUserRights
         * objectPreviews
         * createdDate
-        * modality
         * ontologyItems
         * ontologyItemRelations
         * ontologyCount
@@ -2055,16 +2159,16 @@ class APIObjectSeg(APIObject):
     oKeys = list([
         'segmentationImage'
         ])
-    
+
 
     for __i in APIObject.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectSeg obj: A APIObjectSeg object
@@ -2079,22 +2183,49 @@ class APIObjectSeg(APIObject):
         """prints the json to the console, nicely printed"""
         super(APIObject, self).show()
 
+    def download(self, apisession, wp):
+        """ download the object as zip to a directory"""
+        return APIObject.download(self, apisession, wp)
+
+    def getType(self):
+        """return the type APIObjectType object of the class"""
+        return APIObject.getType(self)
+
+    def getLicense(self):
+        """ return the license APILicence object"""
+        return APIObject.getLicense(self)
+
+    def getMeta(self):
+        """return the meta infos of the object as object APIRawImage """
+
+        meta = APISegImage()
+        meta.set(obj = self.segmentationImage)
+
+        return meta
+
+    def getUserRights(self, apisession):
+        """ return the user rights object """
+        return APIObject.getUserRights(self, apisession)
+
+    def getGroupRights(self, apisession):
+        """ return the group rights object """
+        return APIObject.getGroupRights(self, apisession)
+
 
 class APIObjectSm(APIObject):
     """
     APIObjectSm (Statistical Models)
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
         * objectUserRights
         * objectPreviews
         * createdDate
-        * modality
         * ontologyItems
         * ontologyItemRelations
         * ontologyCount
@@ -2103,6 +2234,7 @@ class APIObjectSm(APIObject):
         * linkedObjects
         * linkedObjectRelations
         * downloadUrl
+        * modality
     """
 
     oKeys = list()
@@ -2111,10 +2243,10 @@ class APIObjectSm(APIObject):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectSm obj: A APIObjectSm object
@@ -2129,14 +2261,42 @@ class APIObjectSm(APIObject):
         """prints the json to the console, nicely printed"""
         super(APIObject, self).show()
 
+    def download(self, apisession, wp):
+        """ download the object as zip to a directory"""
+        return APIObject.download(self, apisession, wp)
+
+    def getType(self):
+        """return the type APIObjectType object of the class"""
+        return APIObject.getType(self)
+
+    def getLicense(self):
+        """ return the license APILicence object"""
+        return APIObject.getLicense(self)
+
+    def getMeta(self):
+        """return the meta infos of the object as object APIRawImage """
+
+        meta = APISurfaceModel()
+        meta.set(obj = self.surfaceModel)
+
+        return meta
+
+    def getUserRights(self, apisession):
+        """ return the user rights object """
+        return APIObject.getUserRights(self, apisession)
+
+    def getGroupRights(self, apisession):
+        """ return the group rights object """
+        return APIObject.getGroupRights(self, apisession)
+
 class APIObjectCtDef(APIObject):
     """
     APIObjectCtDef (Clinical Trial Definition)
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2163,10 +2323,10 @@ class APIObjectCtDef(APIObject):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectCtDef obj: A APIObjectCtDef object
@@ -2181,15 +2341,43 @@ class APIObjectCtDef(APIObject):
         """prints the json to the console, nicely printed"""
         super(APIObject, self).show()
 
+    def download(self, apisession, wp):
+        """ download the object as zip to a directory"""
+        return APIObject.download(self, apisession, wp)
+
+    def getType(self):
+        """return the type APIObjectType object of the class"""
+        return APIObject.getType(self)
+
+    def getLicense(self):
+        """ return the license APILicence object"""
+        return APIObject.getLicense(self)
+
+    def getMeta(self):
+        """return the meta infos of the object as object APIRawImage """
+
+        meta = APICtDef()
+        meta.set(obj = self.clinicalStudyDefinition)
+
+        return meta
+
+    def getUserRights(self, apisession):
+        """ return the user rights object """
+        return APIObject.getUserRights(self, apisession)
+
+    def getGroupRights(self, apisession):
+        """ return the group rights object """
+        return APIObject.getGroupRights(self, apisession)
+
 class APIObjectCtData(APIObject):
     """
     APIObjectCtData (Clinical Trial Data)
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2218,10 +2406,10 @@ class APIObjectCtData(APIObject):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectCtData obj: A APIObjectCtData object
@@ -2242,10 +2430,10 @@ class APIObjectSurfModel(APIObject):
     APIObjectSurfModel (Surface Model)
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2268,16 +2456,16 @@ class APIObjectSurfModel(APIObject):
         'Facet',
         'Vertex'
         ])
-    
+
 
     for __i in APIObject.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectSurfModel obj: A APIObjectSurfModel object
@@ -2298,10 +2486,10 @@ class APIObjectStudy(APIObject):
     APIObjectStudy (Study)
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2320,16 +2508,16 @@ class APIObjectStudy(APIObject):
 
     """
     oKeys = list()
-    
+
 
     for __i in APIObject.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectStudy obj: A APIObjectStudy object
@@ -2350,10 +2538,10 @@ class APIObjectSubject(APIObject):
     APIObjectSubject (Subject)
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2375,16 +2563,16 @@ class APIObjectSubject(APIObject):
     oKeys = list([
         'subject'
         ])
-    
+
 
     for __i in APIObject.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectSubject obj: A APIObjectSubject object
@@ -2406,10 +2594,10 @@ class APIObjectGenPlatform(APIObject):
     APIObjectGenPlatform (Genomic Platform)
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2428,16 +2616,16 @@ class APIObjectGenPlatform(APIObject):
 
     """
     oKeys = list()
-    
+
 
     for __i in APIObject.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectGenPlatform obj: A APIObjectGenPlatform object
@@ -2459,10 +2647,10 @@ class APIObjectGenSample(APIObject):
     APIObjectGenSample (Genomic sample)
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2481,16 +2669,16 @@ class APIObjectGenSample(APIObject):
 
     """
     oKeys = list()
-    
+
 
     for __i in APIObject.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectGenSample obj: A APIObjectGenSample object
@@ -2511,10 +2699,10 @@ class APIObjectGenSeries(APIObject):
     APIObjectGenSeries (Genomic series)
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * type
         * description
         * objectGroupRights
@@ -2533,16 +2721,16 @@ class APIObjectGenSeries(APIObject):
 
     """
     oKeys = list()
-    
+
 
     for __i in APIObject.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObject, self).__init__(self.oKeys) 
+        super(APIObject, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectGenSeries obj: A APIObjectGenSeries object
@@ -2563,10 +2751,10 @@ class APIFolder(APIBasic):
     """
     Folder API Object
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * level
         * parentFolder
         * childFolders
@@ -2589,10 +2777,10 @@ class APIFolder(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIFolder, self).__init__(self.oKeys) 
+        super(APIFolder, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIFolder obj: A APIFolder object
@@ -2606,12 +2794,12 @@ class APIFolder(APIBasic):
     def show(self):
         """prints the json to the console, nicely printed"""
         super(APIFolder, self).show()
-  
+
 class APIOntology(APIBasic):
     """
     API class for ontology entries
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * term
@@ -2628,10 +2816,10 @@ class APIOntology(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIOntology, self).__init__(self.oKeys) 
+        super(APIOntology, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIOntology obj: A APIOntology object
@@ -2651,7 +2839,7 @@ class APIObjectOntology(APIBasic):
     API class for object-ontology entries
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * type
@@ -2672,10 +2860,10 @@ class APIObjectOntology(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObjectOntology, self).__init__(self.oKeys) 
+        super(APIObjectOntology, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectOntology obj: A APIObjectOntology object
@@ -2694,7 +2882,7 @@ class APIFile(APIBasic):
     """
     API class for files
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * createdDate
@@ -2712,18 +2900,17 @@ class APIFile(APIBasic):
         'originalFileName',
         'anonymizedFileHashCode',
         'size',
-        'fileHashCode',
-        'objects'
+        'fileHashCode'
         ])
 
     for __i in APIBasic.oKeys:
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIFile, self).__init__(self.oKeys) 
+        super(APIFile, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIFile obj: A APIFile object
@@ -2742,10 +2929,10 @@ class APILicense(APIBasic):
     """
     API class for licenses
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * description
 
     """
@@ -2759,10 +2946,10 @@ class APILicense(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APILicense, self).__init__(self.oKeys) 
+        super(APILicense, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APILicense obj: A APILicense object
@@ -2781,10 +2968,10 @@ class APIObjectRight(APIBasic):
     """
     API class for object rights
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * description
 
     """
@@ -2798,10 +2985,10 @@ class APIObjectRight(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObjectRight, self).__init__(self.oKeys) 
+        super(APIObjectRight, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectRight obj: A APIObjectRight object
@@ -2811,7 +2998,7 @@ class APIObjectRight(APIBasic):
     def get(self):
         """transforms the class object into a json readable dict"""
         return super(APIObjectRight, self).get()
-   
+
     def show(self):
         """prints the json to the console, nicely printed"""
         super(APIObjectRight, self).show()
@@ -2820,7 +3007,7 @@ class APIObjectLink(APIBasic):
     """
     API class for object links
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * description
@@ -2839,10 +3026,10 @@ class APIObjectLink(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObjectLink, self).__init__(self.oKeys) 
+        super(APIObjectLink, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectLink obj: A APIObjectLink object
@@ -2861,10 +3048,10 @@ class APIModality(APIBasic):
     """
     API class for modalities
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
-        * name  
+        * name
         * description
 
     """
@@ -2878,10 +3065,10 @@ class APIModality(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIModality, self).__init__(self.oKeys) 
+        super(APIModality, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIModality obj: A APIModality object
@@ -2900,7 +3087,7 @@ class APIObjectGroupRight(APIBasic):
     """
     API class for object group rights
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * relatedObject
@@ -2919,10 +3106,10 @@ class APIObjectGroupRight(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObjectGroupRight, self).__init__(self.oKeys) 
+        super(APIObjectGroupRight, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectGroupRight obj: A APIObjectGroupRight object
@@ -2942,13 +3129,13 @@ class APIObjectUserRight(APIBasic):
     API class for object user rights
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * relatedObject
         * relatedRights
         * relatedUser
-        
+
     """
     oKeys = list([
         'id',
@@ -2961,10 +3148,10 @@ class APIObjectUserRight(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIObjectUserRight, self).__init__(self.oKeys) 
+        super(APIObjectUserRight, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIObjectUserRight obj: A APIObjectUserRight object
@@ -2984,12 +3171,12 @@ class APIGroup(APIBasic):
     API class for groups
 
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * Chief
         * name
-        
+
     """
     oKeys = list([
         'id',
@@ -3001,10 +3188,10 @@ class APIGroup(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIGroup, self).__init__(self.oKeys) 
+        super(APIGroup, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIGroup obj: A APIGroup object
@@ -3023,11 +3210,11 @@ class APIUser(APIBasic):
     """
     API class for users
 
-    :attributes: 
+    :attributes:
         * selfUrl
         * id
         * username
-        
+
     """
     oKeys = list([
         'id',
@@ -3038,10 +3225,10 @@ class APIUser(APIBasic):
         oKeys.append(__i)
 
     def __init__(self):
-        super(APIUser, self).__init__(self.oKeys) 
+        super(APIUser, self).__init__(self.oKeys)
 
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIUser obj: A APIUser object
@@ -3063,12 +3250,12 @@ class APIPagination(object):
     API class for Pagination results
 
 
-    :attributes: 
+    :attributes:
         * totalCount
         * pagination
         * items
         * nextPageUrl
-        
+
     """
     oKeys = list([
         'totalCount',
@@ -3080,17 +3267,17 @@ class APIPagination(object):
     def __init__(self, oKeys = oKeys):
         for v in oKeys:
                 setattr(self, v, None)
-        
+
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIPagination obj: A APIPagination object
         """
         if  obj:
             for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
+                if v in obj:
+                    setattr(self, v, obj[v])
         else:
             for v in self.oKeys:
                 setattr(self, v, None)
@@ -3101,9 +3288,98 @@ class APIPagination(object):
 
     def show(self):
         """prints the json to the console, nicely printed"""
-        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))                             
-                                         
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
+    def items(self, otype = Plain):
+        """ return the items as list of correct APIObjects objects
+        
+        :param str otpye: the type of object to return
+        :returns: list of API objects
+        :rtpye: list
+
+        :available object types:
+        * RawImage
+        * SegementationImage
+        * ClinicalStudyData
+        * ClinicalStudyDefinition
+        * GenomicPlatform
+        * GenomicSample
+        * GenomicSeries
+        * Plain
+        * PlainSubject
+        * StatisticalModel
+        * Study
+        * Subject
+        * SurfaceModel
+        * 
+        """
+
+        for item in self.items:
+            if otype == 'RawImage':
+            obj = APIObjectRaw()
+        elif otype == 'SegmentationImage':
+            obj = APIObjectSeg()
+        elif otype == 'StatisticalModel':
+            obj = APIObjectSm()
+        elif otype == 'ClinicalStudyDefinition':
+            obj = APIObjectCtDef()
+        elif otype == 'ClinicalStudyData':
+            obj = APIObjectCtData()
+        elif otype == 'SurfaceModel':
+            obj = APIObjectSurfModel()
+        elif otype == 'GenomicPlatform':
+            obj = APIObjectGenPlatform()
+        elif otype == 'GenomicSample':
+            obj = APIObjectGenSample()
+        elif otype == 'GenomicSeries':
+            obj = APIObjectGenSeries()
+        elif otype == 'Study':
+            obj = APIObjectStudy()
+        elif otype == 'Subject':
+            obj = APIObjectSubject()
+        elif otype == 'Plain':
+            obj = APIObject()
+        elif otype == 'PlainSubject':
+            obj = APIObject()
+        else:
+            obj = APIObject()
+        return obj
+
+    def getPage(self, apisession, resource):
+        """return the result for a specific page nr 
+
+        :param VSDConnecter apisession: the authenticate api session
+        :param str resource: page to return as selfUrl
+        :return: list of items
+        :rtype: list()
+        """
+
+        res = apisession.getRequest(resource)
+
+        if res:
+            print('todo')
+
+    def all(self, apisession, itemlist = list()):
+        """
+        returns all items as list
+
+        :param VSDConnecter apisession: the authenticate api session
+        :param list itemlist: list of items
+        :return: list of all items
+        :rtype: list 
+        """
+
+        for item in self.items:
+            itemlist.append(item)
+        
+        if  self.nextPageUrl:
+
+                return self.all(self.nextPageUrl, itemlist = itemlist)
+            else:
+                return itemlist
+        else:
+            return itemlist
+        
 ##
 ## View Models
 ##
@@ -3112,13 +3388,12 @@ class APIObjectType(object):
     """
     API class for object type view model
 
-
-    :attributes: 
+    :attributes:
         * name
         * displayName
         * displayNameShort
         * selfUrl
-        
+
     """
     oKeys = list([
         'name',
@@ -3130,17 +3405,17 @@ class APIObjectType(object):
     def __init__(self, oKeys = oKeys):
         for v in oKeys:
                 setattr(self, v, None)
-        
+
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
-        :param APIObjecType obj: A APIObjectType object
+        :param APIObjectType obj: A APIObjectType object
         """
         if  obj:
             for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
+                if v in obj:
+                    setattr(self, v, obj[v])
         else:
             for v in self.oKeys:
                 setattr(self, v, None)
@@ -3151,8 +3426,8 @@ class APIObjectType(object):
 
     def show(self):
         """prints the json to the console, nicely printed"""
-        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))                             
- 
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
+
 
 
 class APIRawImage(object):
@@ -3160,12 +3435,12 @@ class APIRawImage(object):
     API class for Raw Image view model
 
 
-    :attributes: 
+    :attributes:
         * sliceThickness
         * spaceBetweenSlices
         * kilovoltPeak
         * modality
-        
+
     """
     oKeys = list([
         'sliceThickness',
@@ -3177,17 +3452,17 @@ class APIRawImage(object):
     def __init__(self, oKeys = oKeys):
         for v in oKeys:
                 setattr(self, v, None)
-        
+
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APIRawImage obj: A APIRawImage object
         """
         if  obj:
             for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
+                if v in obj:
+                    setattr(self, v, obj[v])
         else:
             for v in self.oKeys:
                 setattr(self, v, None)
@@ -3198,7 +3473,7 @@ class APIRawImage(object):
 
     def show(self):
         """prints the json to the console, nicely printed"""
-        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))                             
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
 
 
@@ -3207,10 +3482,10 @@ class APISegImage(object):
     API class for segmenation image view model
 
 
-    :attributes: 
+    :attributes:
         * methodDescription
         * segmentationMethod
-        
+
     """
     oKeys = list([
         'methodDescription',
@@ -3220,17 +3495,17 @@ class APISegImage(object):
     def __init__(self, oKeys = oKeys):
         for v in oKeys:
                 setattr(self, v, None)
-        
+
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APISegImage obj: A APISegImage object
         """
         if  obj:
             for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
+                if v in obj:
+                    setattr(self, v, obj[v])
         else:
             for v in self.oKeys:
                 setattr(self, v, None)
@@ -3241,28 +3516,28 @@ class APISegImage(object):
 
     def show(self):
         """prints the json to the console, nicely printed"""
-        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))                             
- 
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
+
 
 # #class APIStatisticalModel(object):
     """
     API class for Statistical model view model - empty
-    """                             
-    
+    """
+
 ## class APIStudyModel(object):
     """
     API class for Statistical model view model - empty
-    """                             
+    """
 
 
-  
+
 class APISubject(object):
     """
     API class for Subject view model
 
-    :attributes: 
+    :attributes:
         * subjectKey
-        
+
     """
     oKeys = list([
         'subjectKey'
@@ -3271,17 +3546,17 @@ class APISubject(object):
     def __init__(self, oKeys = oKeys):
         for v in oKeys:
                 setattr(self, v, None)
-        
+
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APISubject obj: A APISubject object
         """
         if  obj:
             for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
+                if v in obj:
+                    setattr(self, v, obj[v])
         else:
             for v in self.oKeys:
                 setattr(self, v, None)
@@ -3292,26 +3567,26 @@ class APISubject(object):
 
     def show(self):
         """prints the json to the console, nicely printed"""
-        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))                             
- 
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
+
 
 ## class APICtData(object):
     """
     API class for clinical trial data view model  - empty
-    """                             
-    
+    """
+
 class APICtDef(object):
     """
     API class for clinical trail definition view model
 
-    :attributes: 
+    :attributes:
     * studyOID
     * studyName
     * studyDescription
     * protocolName
     * metaDataVersionOID
     * metaDataVersionName
-        
+
     """
 
     oKeys = list([
@@ -3326,87 +3601,17 @@ class APICtDef(object):
     def __init__(self, oKeys = oKeys):
         for v in oKeys:
                 setattr(self, v, None)
-        
+
     def set(self, obj = None):
-        """ 
+        """
         sets class variable for each key in the object to the keyname and its value
 
         :param APICtDef obj: A APICtDef object
         """
         if  obj:
             for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
-        else:
-            for v in self.oKeys:
-                setattr(self, v, None)
-
-    def get(self):
-        """transforms the class object into a json readable dict"""
-        return self.__dict__
-
-    def show(self):
-        """prints the json to the console, nicely printed"""
-        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))                             
-
-
-class APIGenPlatform(object):
-    """
-    API class for  genomic platform view model
-    """          
-
-class APIGenSeries(object):
-    """
-    API class for genomic series view model
-    """                             
-    
-class APIGenSample(object):
-    """
-    API class for genomic sample view model
-    """                             
-    
-class APIPlain(object):
-    """
-    API class for plain (undefined object) model view model
-    """  
-
-class APIPlainsubject(object):
-    """
-    API class for plain subject (undefined subject object) model view model
-    """                              
-                               
-
-    
-
-class APIToken(object):
-    """
-    API class to work with the tokens
-
-    :attributes:
-        * tokenType
-        * tokenValue
-        
-    """
-    oKeys = list([
-        'tokenType',
-        'tokenValue'
-        ])
-
-    def __init__(self, oKeys = oKeys):
-        for v in oKeys:
-                setattr(self, v, None)
-
-        
-    def set(self, obj = None):
-        """ 
-        sets class variable for each key in the object to the keyname and its value
-
-        :param APIToken obj: A APIToken object
-        """
-        if  obj:
-            for v in self.oKeys:
-                if v in obj: 
-                    setattr(self, v, obj[v])              
+                if v in obj:
+                    setattr(self, v, obj[v])
         else:
             for v in self.oKeys:
                 setattr(self, v, None)
@@ -3418,3 +3623,74 @@ class APIToken(object):
     def show(self):
         """prints the json to the console, nicely printed"""
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
+
+
+class APIGenPlatform(object):
+    """
+    API class for  genomic platform view model
+    """
+
+class APIGenSeries(object):
+    """
+    API class for genomic series view model
+    """
+
+class APIGenSample(object):
+    """
+    API class for genomic sample view model
+    """
+
+class APIPlain(object):
+    """
+    API class for plain (undefined object) model view model
+    """
+
+class APIPlainSubject(object):
+    """
+    API class for plain subject (undefined subject object) model view model
+    """
+
+
+
+
+class APIToken(object):
+    """
+    API class to work with the tokens
+
+    :attributes:
+        * tokenType
+        * tokenValue
+
+    """
+    oKeys = list([
+        'tokenType',
+        'tokenValue'
+        ])
+
+    def __init__(self, oKeys = oKeys):
+        for v in oKeys:
+                setattr(self, v, None)
+
+
+    def set(self, obj = None):
+        """
+        sets class variable for each key in the object to the keyname and its value
+
+        :param APIToken obj: A APIToken object
+        """
+        if  obj:
+            for v in self.oKeys:
+                if v in obj:
+                    setattr(self, v, obj[v])
+        else:
+            for v in self.oKeys:
+                setattr(self, v, None)
+
+    def get(self):
+        """transforms the class object into a json readable dict"""
+        return self.__dict__
+
+    def show(self):
+        """prints the json to the console, nicely printed"""
+        print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
+    

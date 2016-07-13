@@ -7,7 +7,7 @@
 1.Import libs
 
     from pathlib import Path, PurePath, WindowsPath
-    import connectVSD
+    from vsdConnect import connectVSD
 
 2.load the xml with your credentials
 
