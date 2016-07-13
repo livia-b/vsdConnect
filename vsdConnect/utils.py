@@ -4,12 +4,23 @@ from vsdConnect import models
 import logging
 logger = logging.getLogger(__name__)
 
-def containedObjectsPreviewToDisk(c,folderData, outputfolder, name):
+def containedObjectsPreviewToDisk(c,folderData, outputfolder, name, exc_raise = True):
+    fullObjects = []
     for object in folderData.containedObjects:
-        objId = os.path.basename(object.selfUrl)
-        for i, preview in enumerate(c.getObject(object.selfUrl).objectPreviews):
-            p_obj = models.APIPreview(**c.getRequest(preview.selfUrl))
-            c._download(p_obj.imageUrl, os.path.join(outputfolder, "%s_%s_%02d.jpg" % (name, objId, i)))
+        try:
+            objId = os.path.basename(object.selfUrl)
+            objectFull = c.getObject(object.selfUrl)
+            fullObjects.append(objectFull)
+            for i, preview in enumerate(c.downloadObjectPreviewImages()):
+                with open(os.path.join(outputfolder, "%s_%s_%02d.jpg" % (name, objId, i))) as f:
+                    f.write(preview)
+        except Exception as e:
+            if exc_raise:
+                raise
+            else:
+                print e
+    return fullObjects
+
 
 
 def flattenDictFields(connector, dictRecord, prefix ='.',
