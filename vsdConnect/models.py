@@ -33,6 +33,11 @@ class APIPagination(models.Base):
         firstItem = self.items[0]
         return firstItem.selfUrl
 
+class APIFileUploadResponse(APIBasic):
+    relatedObject = fields.EmbeddedField(APIBasic)
+    file = fields.EmbeddedField(APIBasic)
+
+
 class APIFile(APIBasic):
     id = fields.IntField()
     createdDate = fields.StringField()

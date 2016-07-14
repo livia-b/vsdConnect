@@ -257,11 +257,9 @@ class VSDConnecter:
     def _delete(self, resource, *args, **kwargs):  # reimplements VSDConnect.postRequest
         return self._requestsAttempts(self.s.delete, resource, *args, **kwargs).json()
 
-    def _post(self, resource, **kwargs):
-        # not idempotent, no multiple  attempts
-        res = self.s.post(self.fullUrl(resource), **kwargs)
-        res.raise_for_status()
-        return res.json()
+    def _post(self, resource, *args, **kwargs):
+        # should I avoid multiplt attempts? not idempotent, no multiple  attempts
+        return self._requestsAttempts(self.s.post, resource, *args, **kwargs).json()
 
     def _options(self, resource, *args, **kwargs):  # reimplements VSDConnect.getRequest
         return self._requestsAttempts(self.s.options, resource, *args, **kwargs).json()
@@ -1340,36 +1338,29 @@ class VSDConnecter:
         :return: the generated object
         :rtype: APIObject
         """
-        parts = math.ceil(fp.stat().st_size / chunksize)
-        part = 0
+        parts = math.ceil(fp.stat().st_size / float(chunksize))
         err = False
         maxchunksize = 1024 * 1024 * 100
-        if chunksize < maxchunksize:
-            for chunk in self.chunkedread(fp, chunksize):
-                part = part + 1
-                print('uploading part {0} of {1}'.format(part, parts))
-
-                files = {'file': (str(fp.name), chunk)}
-                res = self.s.post(self.url + 'chunked_upload?chunk={0}'.format(part), files=files)
-                if res.status_code == requests.codes.ok:
-                    print('uploaded part {0} of {1}'.format(part, parts))
-                else:
-                    err = True
-
-            if not err:
-                resource = 'chunked_upload/commit?filename={0}'.format(fp.name)
-                res = self.postRequestSimple(resource)
-
-                relObj = res['relatedObject']
-                obj = self.getObject(relObj['selfUrl'])
-                return obj
-
-            else:
-                return None
-        else:
+        if chunksize >= maxchunksize:
             print(
                 'not uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, maxchunksize))
             return None
+
+        for part, chunk in enumerate(self.chunkedread(fp, chunksize),1):
+            print('uploading part {0} of {1}'.format(part, parts))
+            files = {'file': (str(fp.name), chunk)}
+            res = self._post(self.fullUrl('/chunked_upload?chunk={0}').format(part), files=files)
+            print('uploaded part {0} of {1} [{2}]'.format(part, parts, res))
+
+        res = self._post(self.fullUrl('chunked_upload/commit?filename={0}'.format(fp.name)))
+        print(res)
+        return self.getFile(res['file']['selfUrl']), self.getObject(res['relatedObject']['selfUrl'])
+
+        # relObj = res['relatedObject']
+        # obj = self.getObject(relObj['selfUrl'])
+        # return obj
+
+
 
     def postFolder(self, parent, name, check=True):
         """
@@ -1435,12 +1426,9 @@ class VSDConnecter:
             print("opening file", filename, "failed, aborting")
             return
 
-        res = self.s.post(self.url + 'upload', files=files)
-        if res.status_code == requests.codes.created:
-            obj = self.createAPIObject(res)
-            return obj
-        else:
-            return res.status_code
+        res = self._post(self.url + 'upload', files=files)
+        return self.getFile(res['file']['selfUrl']), self.getObject(res['relatedObject']['selfUrl'])
+
 
     #################################################
     # api objects handling (UPDATE)
@@ -1745,14 +1733,10 @@ class VSDConnecter:
         :rtype: APIFolder
         """
 
-        objSelfUrl = dict([('selfUrl', obj.selfUrl)])
-        objects = target.containedObjects
+        objSelfUrl = vsdModels.APIBasic(**obj.to_struct())
 
-        if not objects:
-            objects = list()
-        if objects.count(objSelfUrl) == 0:
-            objects.append(objSelfUrl)
-            target.containedObjects = objects
+        if not objSelfUrl in target.containedObjects:
+            target.containedObjects.append(objSelfUrl)
             res = self.putRequest('folders', data=target.to_struct())
 
             target = vsdModels.APIFolder(**res)
