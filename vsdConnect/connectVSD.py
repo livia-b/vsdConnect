@@ -242,7 +242,7 @@ class VSDConnecter:
                 res.raise_for_status()
                 return res
             except:
-                logger.info("Connection attempt %s/%s: %s" % (i, self.maxAttempts, res))
+                logger.info("Connection attempt %s/%s: %s %s" % (i, self.maxAttempts, res , url))
                 if res.status_code == 401 and i > self.maxAttempts401:
                     raise
         # re-raise if > max attempts
@@ -1347,13 +1347,12 @@ class VSDConnecter:
             return None
 
         for part, chunk in enumerate(self.chunkedread(fp, chunksize),1):
-            print('uploading part {0} of {1}'.format(part, parts))
+            print('({2})uploading part {0} of {1}'.format(part, parts, fp.name))
             files = {'file': (str(fp.name), chunk)}
             res = self._post(self.fullUrl('/chunked_upload?chunk={0}').format(part), files=files)
-            print('uploaded part {0} of {1} [{2}]'.format(part, parts, res))
+            #print('uploaded part {0} of {1} '.format(part, parts))
 
         res = self._post(self.fullUrl('chunked_upload/commit?filename={0}'.format(fp.name)))
-        print(res)
         return self.getFile(res['file']['selfUrl']), self.getObject(res['relatedObject']['selfUrl'])
 
         # relObj = res['relatedObject']
