@@ -28,13 +28,14 @@ class VSDConnecterExtension(VSDConnecter):
         
     def getLinkedSegmentation(self,objectID):
         result=None
-        obj=self.getObject(objectID)
-        if obj==None:
-            return None
+	try:
+           obj=self.getObject(objectID)
+	except:
+	   return None
         for link in obj.linkedObjects:
-            linkedObject=self.getRequest(link['selfUrl'])
-            if linkedObject['type']==2:
-                result=linkedObject['id']
+            linkedObject=self.getObject(link.selfUrl)
+            if linkedObject.type==2:
+                result=linkedObject.id
         return result
 
 
@@ -44,13 +45,12 @@ class VSDConnecterExtension(VSDConnecter):
         segFile=self.chunkFileUpload(segmentationFilename)
  
         if segFile.type!=2:
-            print("Error retrieving segmentation object after upload, aborting")
-            sys.exit(0)
+            raise ValueError("Error retrieving segmentation object after upload, aborting")
         return segFile
     
     def addOntologyRelation(self,ontologyRelation):
-        oType=ontologyRelation['type']
-        result=self.postRequest('/object-ontologies/'+str(oType),ontologyRelation)
+        oType=ontologyRelation.type
+        result=self.postRequest('/object-ontologies/'+str(oType),ontologyRelation.to_struct())
         #result2=self.putRequestSimple("/object-ontologies/"+str(oType)+"/"+str(result["id"]))
         return result
     
