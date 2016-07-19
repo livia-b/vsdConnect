@@ -59,3 +59,30 @@ def flattenDictFields(connector, dictRecord, prefix ='.',
         unsortedFields = fields
         fields = OrderedDict([(k, unsortedFields[k]) for k in columns ])
     return fields
+
+from connectVSD import VSDConnecter, vsdModels
+
+def getCompleteJson(c, objJson, maxDepth =3, maxObjInList=None, curDepth = 0):
+    import itertools
+    curModel = c._instantiateResource(objJson)
+    curJson = curModel.to_struct()
+    if curDepth > maxDepth:
+        return curJson
+    curDepth += 1
+    if isinstance(curModel, vsdModels.APIPagination):
+        fieldsIterator = c.iteratePageItems(curModel)
+        for i, item  in enumerate(itertools.islice(fieldsIterator, maxObjInList)):
+            curJson['items'][i] = getCompleteJson(c, item, maxDepth, maxObjInList, curDepth)
+        #nexturl??
+        return curJson
+    if curModel.get_missing_fields():
+        curModel.populate(**c.getResource(curModel.selfUrl))
+        curJson = curModel.to_struct()
+    for name, field in curModel:
+        if isinstance(field, vsdModels.APIBasic):
+            curJson[name] = getCompleteJson(c, field, maxDepth, maxObjInList, curDepth)
+        if isinstance(field, list):
+            for i, item  in enumerate(itertools.islice(field, maxObjInList)):
+                curJson[name][i] = getCompleteJson(c, item, maxDepth, maxObjInList, curDepth)
+    return curJson
+
