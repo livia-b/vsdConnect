@@ -16,6 +16,9 @@ class  APIToken(models.Base):
 class fieldURL(fields.StringField):
     pass #add url-specific fields?
 
+class longIntField(fields.IntField):
+    types = (int, long,)
+
 class ParamsPagination(models.Base):
     rpp = fields.IntField()
     page = fields.IntField()
@@ -44,7 +47,7 @@ class APIFile(APIBasic):
     downloadUrl = fieldURL()
     originalFileName = fields.StringField()
     anonymizedFileHashCode = fields.StringField()
-    size = fields.IntField()
+    size = longIntField()
     fileHashCode = fields.StringField()
     objects = fields.EmbeddedField(APIPagination) #ObjectPagination
 
@@ -166,7 +169,6 @@ class ClinicalStudyData(APIObject):
 
 class StatisticalModel(APIObject):
     pass
-
 
 
 
