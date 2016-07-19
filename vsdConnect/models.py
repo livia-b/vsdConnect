@@ -26,6 +26,17 @@ class ParamsPagination(models.Base):
 class APIBasic(models.Base):
     selfUrl = fieldURL()
 
+    def __str__(self):
+        return '{name} {url}'.format(name=self.__class__.__name__, url = self.selfUrl)
+
+
+class APIBaseId(APIBasic):
+    id = fields.IntField()
+
+    def __str__(self):
+        return '{name} {url}'.format(name=self.__class__.__name__, url = self.id)
+
+
 class APIPagination(models.Base):
     totalCount = fields.IntField(required=True)
     pagination = fields.EmbeddedField(ParamsPagination, required=True)
@@ -41,8 +52,7 @@ class APIFileUploadResponse(APIBasic):
     file = fields.EmbeddedField(APIBasic)
 
 
-class APIFile(APIBasic):
-    id = fields.IntField()
+class APIFile(APIBaseId):
     createdDate = fields.StringField()
     downloadUrl = fieldURL()
     originalFileName = fields.StringField()
@@ -54,10 +64,9 @@ class APIFile(APIBasic):
 class FilePagination(APIPagination):
     items = fields.ListField(APIFile)
 
-class APIPreview(APIBasic):
+class APIPreview(APIBaseId):
     imageUrl = fieldURL()
     thumbnailUrl = fieldURL()
-    id = fields.IntField()
 
 class APIObjectType(APIBasic):
     displayName = fields.StringField()
@@ -83,8 +92,7 @@ class APIGroup(APIBasic):
 class APIUser(APIBasic):
     pass
 
-class APIObject(APIBasic):
-    id = fields.IntField()
+class APIObject(APIBaseId):
     name = fields.StringField()
     type = fields.EmbeddedField(APIObjectType)
     description  = fields.StringField()
@@ -105,14 +113,12 @@ class APIObject(APIBasic):
 class ObjectPagination(APIPagination):
     items = fields.ListField(APIObject)
 
-class APIObjectLink(APIBasic):
-    id = fields.IntField()
+class APIObjectLink(APIBaseId):
     description = fields.StringField()
-    object1 = fields.StringField()
-    object2 = fields.StringField()
+    object1 = fields.EmbeddedField(APIBasic)
+    object2 = fields.EmbeddedField(APIBasic)
 
-class APIFolder(APIBasic):
-    id = fields.IntField()
+class APIFolder(APIBaseId):
     name = fields.StringField()
     level = fields.IntField()
     parentFolder = fields.EmbeddedField(APIBasic)

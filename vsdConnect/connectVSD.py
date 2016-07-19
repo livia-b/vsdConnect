@@ -227,6 +227,17 @@ class VSDConnecter:
             for chunk in res.iter_content(1024):
                 f.write(chunk)
 
+    def _downloadOnlyHeader(self, url, filename):
+        r = urlparse(url)
+        res = self._requestsAttempts(self.s.get, r.geturl(), params=r.params, stream=True)
+
+        with open(filename, 'wb') as f:
+            for i, chunk in zip( range(3), res.iter_content(1024)):
+                f.write(chunk)
+
+
+
+
     def _requestsAttempts(self, method, url, *args, **kwargs):
         #     generic wrapper around request library with multiple attempts
         #     replaces self._httpResponseCheck(self, response):
@@ -1260,10 +1271,10 @@ class VSDConnecter:
         """
 
         obj = self.getObject(resource)
-        status = False
         if obj.linkedObjectRelations:
-            for link in obj.linkedObjectRelations:
-                self.delRequest(link["selfUrl"])
+            for link in self.iteratePageItems(obj.linkedObjectRelations, vsdModels.APIObjectLink):
+                print(link)
+                self.delRequest(link.selfUrl)
         else:
             print('nothing to delete, no links available')
 
@@ -1619,10 +1630,8 @@ class VSDConnecter:
         :rtype: json
         """
 
-        link = vsdModels.APIObjectLink()
-        link.object1 = dict([('selfUrl', obj1.selfUrl)])
-        link.object2 = dict([('selfUrl', obj2.selfUrl)])
-
+        link = vsdModels.APIObjectLink(object1 =obj1, object2 = obj2)
+        link.validate()
         return self.postRequest('object-links', data=link.to_struct())
 
     def addOntologyToObject(self, obj, ontology, pos=0):
