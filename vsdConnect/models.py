@@ -34,7 +34,7 @@ class APIBaseId(APIBasic):
     id = fields.IntField()
 
     def __str__(self):
-        return '{name} {url}'.format(name=self.__class__.__name__, url = self.id)
+        return '{name} {url} {selfname}'.format(name=self.__class__.__name__, url = self.id, selfname = getattr(self, 'name', ""))
 
 
 class APIPagination(models.Base):
@@ -154,8 +154,19 @@ resourceTypes = {
 ##########################################
 # Object types
 ##########################################
+class ImageModality(APIBaseId):
+    description = fields.StringField()
+    name = fields.StringField()
+
+class RawImageData(models.Base):
+    sliceThickness = fields.FloatField()
+    kilovoltPeak = fields.FloatField()
+    spaceBetweenSlices = fields.FloatField()
+    modality = fields.EmbeddedField(ImageModality)
+
 class RawImage(APIObject):
-    rawImage = fields.EmbeddedField(dict) #{u'sliceThickness': None, u'kilovoltPeak': None, u'spaceBetweenSlices': None, u'modality': {u'description': u'White Matter Probabilistic Map', u'id': 39, u'selfUrl': u'https://demo.virtualskeleton.ch/api/modalities/39', u'name': u'MR_WM_prob'}}
+    rawImage = fields.EmbeddedField(RawImageData)
+
 
 
 class SurfaceModel(APIObject):
@@ -164,8 +175,13 @@ class SurfaceModel(APIObject):
 class Subject(APIObject):
     pass
 
+class SegmentationImageData(models.Base):
+    methodDescription = fields.EmbeddedField(dict)
+    segmentationMethod = fields.EmbeddedField(dict) #{u'displayName': u'Manual', u'id': 3, u'selfUrl': u'https://www.virtualskeleton.ch/api/segmentation_methods/3', u'name': u'Manual'})
+
+
 class SegmentationImage(APIObject):
-    pass
+    segmentationImage = fields.EmbeddedField(SegmentationImageData)
 
 class ClinicalStudyDefinition(APIObject):
     pass

@@ -205,13 +205,14 @@ class VSDConnecter:
         """
 
         token = False
-        res = self._get(self.url + 'tokens/jwt', auth=(self.username, self.password), verify=False)
-        token = vsdModels.APIToken(**res)
+        res = self.s.get(self.url + 'tokens/jwt', auth=(self.username, self.password), verify=False)
+        token = vsdModels.APIToken(**res.json())
         try:
             payload = jwt.decode(token.tokenValue, verify=False)
 
         except jwt.InvalidTokenError as e:
             logger.error('token invalid, try using Basic Auth{0}'.format(e))
+            raise
 
         return token
 
@@ -219,23 +220,15 @@ class VSDConnecter:
     # requests library wrappers
     ################################################
 
-    def _download(self, url, filename):
+    def _download(self, url, filename, onlyHeader = False):
         r = urlparse(url)
         res = self._requestsAttempts(self.s.get, r.geturl(), params=r.params, stream=True)
 
         with open(filename, 'wb') as f:
-            for chunk in res.iter_content(1024):
+            for n, chunk in enumerate(res.iter_content(1024)):
                 f.write(chunk)
-
-    def _downloadOnlyHeader(self, url, filename):
-        r = urlparse(url)
-        res = self._requestsAttempts(self.s.get, r.geturl(), params=r.params, stream=True)
-
-        with open(filename, 'wb') as f:
-            for i, chunk in zip( range(3), res.iter_content(1024)):
-                f.write(chunk)
-
-
+                if onlyHeader and n > 2:
+                    break
 
 
     def _requestsAttempts(self, method, url, *args, **kwargs):
@@ -246,10 +239,10 @@ class VSDConnecter:
         #     :param args: args for request call
         #     :param kwargs: kwargs for request call
         #     :return: request object (raise if error after self.maxAttempts)
-        self._stayAlive()
         for i in range(self.maxAttempts):
             res = method(url, *args, **kwargs)
             try:
+                self._stayAlive()
                 res.raise_for_status()
                 return res
             except:
