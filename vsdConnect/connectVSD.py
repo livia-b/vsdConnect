@@ -220,10 +220,13 @@ class VSDConnecter:
     # requests library wrappers
     ################################################
 
-    def _download(self, url, filename, onlyHeader = False):
+    def _download(self, url, fp, onlyHeader = False):
         r = urlparse(url)
         res = self._requestsAttempts(self.s.get, r.geturl(), params=r.params, stream=True)
-
+        try:
+            filename = fp.name  # path object
+        except:
+            filename = fp  # string
         with open(filename, 'wb') as f:
             for n, chunk in enumerate(res.iter_content(1024)):
                 f.write(chunk)
@@ -354,20 +357,6 @@ class VSDConnecter:
         params = dict([('rpp', rpp), ('page', page), ('include', include)])
         return self._get(self.fullUrl(resource), params=params)
 
-    def downloadZip(self, resource, fp):
-        """
-        download the zipfile into the given file (fp)
-
-        :param str resource: download URL
-        :param Path fp:  filepath
-        :return: None or status_code ok (200)
-        :rtype: int
-        """
-        try:
-            filename = fp.name  # path object
-        except:
-            filename = fp  # string
-        self._download(resource, filename)
 
     def downloadObject(self, obj, wp=None):
         """
@@ -383,7 +372,7 @@ class VSDConnecter:
         if wp:
             fp = Path(wp, fp)
 
-        res = self._download(self.fullUrl(obj.downloadUrl), fp)
+        res = self._download(self.fullUrl(obj.downloadUrl), fp.name)
 
     def downloadObjectPreviewImages(self, object, thumbnail=True):
         field = 'thumbnailUrl' if thumbnail else 'imageUrl'
@@ -1342,7 +1331,7 @@ class VSDConnecter:
         :return: the generated object
         :rtype: APIObject
         """
-        parts = math.ceil(fp.stat().st_size / float(chunksize))
+        parts = int(math.ceil(fp.stat().st_size / float(chunksize)))
         err = False
         maxchunksize = 1024 * 1024 * 100
         if chunksize >= maxchunksize:
@@ -1350,12 +1339,13 @@ class VSDConnecter:
                 'not uploaded: defined chunksize {0} is bigger than the allowed maximum {1}'.format(chunksize, maxchunksize))
             return None
 
+        part = 0
         for part, chunk in enumerate(self.chunkedread(fp, chunksize),1):
-            print('({2})uploading part {0} of {1}'.format(part, parts, fp.name))
+            logger.info('({2})uploading part {0} of {1}'.format(part, parts, fp.name))
             files = {'file': (str(fp.name), chunk)}
             res = self._post(self.fullUrl('/chunked_upload?chunk={0}').format(part), files=files)
-            #print('uploaded part {0} of {1} '.format(part, parts))
 
+        print('finish, uploaded part {0} of {1} '.format(part, parts))
         res = self._post(self.fullUrl('chunked_upload/commit?filename={0}'.format(fp.name)))
         return self.getFile(res['file']['selfUrl']), self.getObject(res['relatedObject']['selfUrl'])
 
