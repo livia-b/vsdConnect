@@ -117,7 +117,7 @@ class JWTAuth(AuthBase):
         return r
 
 
-class VSDConnecter:
+class VSDConnecter(object):
     def __init__(
             self,
             authtype='jwt',
@@ -205,7 +205,12 @@ class VSDConnecter:
         """
 
         token = False
-        res = self.s.get(self.url + 'tokens/jwt', auth=(self.username, self.password), verify=False)
+        try:
+            res = self.s.get(self.url + 'tokens/jwt', auth=(self.username, self.password), verify=False)
+            res.raise_for_status()
+        except:
+            logger.error(res)
+            raise
         token = vsdModels.APIToken(**res.json())
         try:
             payload = jwt.decode(token.tokenValue, verify=False)
@@ -232,6 +237,7 @@ class VSDConnecter:
                 f.write(chunk)
                 if onlyHeader and n > 2:
                     break
+        return filename
 
 
     def _requestsAttempts(self, method, url, *args, **kwargs):
@@ -358,21 +364,21 @@ class VSDConnecter:
         return self._get(self.fullUrl(resource), params=params)
 
 
-    def downloadObject(self, obj, wp=None):
+    def downloadObject(self, obj, workingDir=None):
         """
         download the object into a ZIP file based on the object name and the working directory
 
         :param APIObject obj: object
-        :param Path wp: workpath, where to store the zip
+        :param Path workingDir: workpath, where to store the zip
         :return: None or filename
         :rtype: str
         """
 
         fp = Path(obj.name).with_suffix('.zip')
-        if wp:
-            fp = Path(wp, fp)
+        if workingDir:
+            fp = Path(workingDir, fp)
 
-        res = self._download(self.fullUrl(obj.downloadUrl), fp.name)
+        return self._download(self.fullUrl(obj.downloadUrl), fp.name)
 
     def downloadObjectPreviewImages(self, object, thumbnail=True):
         field = 'thumbnailUrl' if thumbnail else 'imageUrl'
