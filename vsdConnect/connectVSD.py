@@ -59,8 +59,6 @@ except:
     import xml.etree.ElementTree as ET
 
 
-
-
 requests.packages.urllib3.disable_warnings()
 
 class SAMLAuth(AuthBase):
@@ -411,7 +409,7 @@ class VSDConnecter:
             print('nothing to delete, no links available')
 
     def getPaginated(self, resource):
-        """ 
+        """
         get paginated object
         """
         res = self.getRequest(resource)
@@ -1669,13 +1667,15 @@ class VSDConnecter:
            folders.remove(folders[0])
 
         for i in range (parents, len(folders)):
-            folders.remove(folders[i])
+            folders.remove(folders[-1])
 
         folders.reverse()
+        
         fparent = rootfolder
 
         if fparent:
             for fname in folders:
+                print(fname)
                 fchild = None
                 if fparent:
                     if fparent.childFolders:
@@ -1884,6 +1884,22 @@ class APIBasic(object):
         """prints the json to the console, nicely printed"""
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
+    def getID(self):
+        """return the ID from the selfUrl"""
+        selfURL_path = urllib.parse.urlsplit(self.selfUrl).path
+        if PYTHON3:
+            oID = Path(selfURL_path).name
+        else:
+            oID = os.path.basename(selfURL_path)
+
+        try:
+            r = int(oID)
+        except ValueError as err:
+            print('no object ID in the selfUrl {0}. Reason: {1}'.format(selfURL,err))
+            r = None
+        return r
+
+
 class APIObject(APIBasic):
     """
     API Object
@@ -1960,7 +1976,7 @@ class APIObject(APIBasic):
         """
 
         fp = Path(self.name).with_suffix('.zip')
-        
+
         if wp:
             fp = Path(wp, fp)
 
@@ -1972,12 +1988,83 @@ class APIObject(APIBasic):
         else:
             return None
 
+    def delete(self, apisession):
+        """
+        delete an unvalidated object
+
+        :param VSDConnecter apisession: authenticated api session
+        :return: status_code
+        :rtype: int
+        """
+        return apisession.delObject(self)
+
+    def publish(self, apisession):
+        """
+        publish the object
+
+        :param VSDConnecter apisession: authenticated api session
+        :return: status code
+        :rtype: int
+        """
+        return apisession.publishObject(self)
+
+    def put(self, apisession):
+        """ update (post) the object
+
+        :param VSDConnecter apisession: authenticated api session
+        :return: the updated object
+        :rtype: APIObject
+        """
+
+        res = apisession.putRequest(self.selfUrl, data = self.get())
+
+        if res:
+            self.set(obj = res)
+            return obj
+        else:
+            return res
+
+    def vsdname(self, part):
+        """
+        return the desired part of the vsd name template
+
+        :param str part: part of the name to retrieve
+        :return: value of the part
+        :rtype: str or int
+
+         :attributes:
+            * ns (namespace)
+            * anatomy
+            * age
+            * gender
+            * modality
+            * id
+        """
+        fn = Path(self.name)
+        vsd_template = fn.stem.split('.')
+
+        value = None
+        if part == 'ns':
+            value = vsd_template[0]
+        if part == 'anatomy':
+            value = vsd_template[1]
+        if part == 'age':
+            value = vsd_template[2]
+        if part == 'gender':
+            value = vsd_template[3]
+        if part == 'modality':
+            value = vsd_template[4]
+        if part == 'id':
+            value = int(vsd_template[5])
+
+        return value
+
     def getType(self):
         """return the type APIObjectType object of the class"""
 
         otype = APIObjectType()
         otype.set(obj = self.type)
-        
+
         return otype
 
     def getLicense(self):
@@ -1995,7 +2082,7 @@ class APIObject(APIBasic):
         :return: list of object userrights
         :rtype: APIObjectUserRights
         """
-        
+
         rights = None
 
         if self.objectUserRights:
@@ -2011,13 +2098,13 @@ class APIObject(APIBasic):
         return rights
 
     def getGroupRights(self, apisession):
-        """return a list of group Rights objects 
+        """return a list of group Rights objects
 
         :param VSDConnecter apisession: authenticated api session to SMIR
         :return: list of object grouprights
         :rtype: APIObjectGroupRights
         """
-        
+
         rights = None
 
         if self.objectGroupRights:
@@ -2030,10 +2117,14 @@ class APIObject(APIBasic):
                 gright.set(obj = res)
                 rights.append(gright)
 
-        return rights             
+        return rights
 
     def previews(self):
+        """ previews to give (todo)"""
+        print('todo')
 
+    def links(self):
+        """ return a list of linked objects (APIBasic) """
         print('todo')
 
 class APIObjectRaw(APIObject):
@@ -2093,6 +2184,18 @@ class APIObjectRaw(APIObject):
         """ download the object as zip to a directory"""
         return APIObject.download(self, apisession, wp)
 
+    def delete(self, apisession):
+        """ delete an unpublished object"""
+        return APIObject.delete(self, apisession)
+
+    def publish(self, apisession):
+        """ publish an unpublished object"""
+        return APIObject.publish(self, apisession)
+
+    def vsdname(self, part):
+        """ return part of the vsd name"""
+        return APIObject.vsdname(self, part)
+
     def getType(self):
         """return the type APIObjectType object of the class"""
         return APIObject.getType(self)
@@ -2118,7 +2221,7 @@ class APIObjectRaw(APIObject):
         return APIObject.getGroupRights(self, apisession)
 
     def getModality(self):
-        """ get the modality of an object 
+        """ get the modality of an object
 
         :return: the modality object
         :rtype: APIModality
@@ -2186,6 +2289,18 @@ class APIObjectSeg(APIObject):
     def download(self, apisession, wp):
         """ download the object as zip to a directory"""
         return APIObject.download(self, apisession, wp)
+
+    def delete(self, apisession):
+        """ delete an unpublished object"""
+        return APIObject.delete(self, apisession)
+
+    def publish(self, apisession):
+        """ publish an unpublished object"""
+        return APIObject.publish(self, apisession)
+
+    def vsdname(self, part):
+        """ return part of the vsd name"""
+        return APIObject.vsdname(self, part)
 
     def getType(self):
         """return the type APIObjectType object of the class"""
@@ -2264,6 +2379,18 @@ class APIObjectSm(APIObject):
     def download(self, apisession, wp):
         """ download the object as zip to a directory"""
         return APIObject.download(self, apisession, wp)
+
+    def delete(self, apisession):
+        """ delete an unpublished object"""
+        return APIObject.delete(self, apisession)
+
+    def publish(self, apisession):
+        """ publish an unpublished object"""
+        return APIObject.publish(self, apisession)
+
+    def vsdname(self, part):
+        """ return part of the vsd name"""
+        return APIObject.vsdname(self, part)
 
     def getType(self):
         """return the type APIObjectType object of the class"""
@@ -2345,6 +2472,17 @@ class APIObjectCtDef(APIObject):
         """ download the object as zip to a directory"""
         return APIObject.download(self, apisession, wp)
 
+    def delete(self, apisession):
+        """ delete an unpublished object"""
+        return APIObject.delete(self, apisession)
+
+    def publish(self, apisession):
+        """ publish an unpublished object"""
+        return APIObject.publish(self, apisession)
+
+    def vsdname(self, part):
+        """ return part of the vsd name"""
+        return APIObject.vsdname(self, part)
     def getType(self):
         """return the type APIObjectType object of the class"""
         return APIObject.getType(self)
@@ -3166,6 +3304,7 @@ class APIObjectUserRight(APIBasic):
         """prints the json to the console, nicely printed"""
         super(APIObjectUserRight, self).show()
 
+
 class APIGroup(APIBasic):
     """
     API class for groups
@@ -3205,6 +3344,7 @@ class APIGroup(APIBasic):
     def show(self):
         """prints the json to the console, nicely printed"""
         super(APIGroup, self).show()
+
 
 class APIUser(APIBasic):
     """
@@ -3290,63 +3430,8 @@ class APIPagination(object):
         """prints the json to the console, nicely printed"""
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
-    def items(self, otype = Plain):
-        """ return the items as list of correct APIObjects objects
-        
-        :param str otpye: the type of object to return
-        :returns: list of API objects
-        :rtpye: list
-
-        :available object types:
-        * RawImage
-        * SegementationImage
-        * ClinicalStudyData
-        * ClinicalStudyDefinition
-        * GenomicPlatform
-        * GenomicSample
-        * GenomicSeries
-        * Plain
-        * PlainSubject
-        * StatisticalModel
-        * Study
-        * Subject
-        * SurfaceModel
-        * 
-        """
-
-        for item in self.items:
-            if otype == 'RawImage':
-            obj = APIObjectRaw()
-        elif otype == 'SegmentationImage':
-            obj = APIObjectSeg()
-        elif otype == 'StatisticalModel':
-            obj = APIObjectSm()
-        elif otype == 'ClinicalStudyDefinition':
-            obj = APIObjectCtDef()
-        elif otype == 'ClinicalStudyData':
-            obj = APIObjectCtData()
-        elif otype == 'SurfaceModel':
-            obj = APIObjectSurfModel()
-        elif otype == 'GenomicPlatform':
-            obj = APIObjectGenPlatform()
-        elif otype == 'GenomicSample':
-            obj = APIObjectGenSample()
-        elif otype == 'GenomicSeries':
-            obj = APIObjectGenSeries()
-        elif otype == 'Study':
-            obj = APIObjectStudy()
-        elif otype == 'Subject':
-            obj = APIObjectSubject()
-        elif otype == 'Plain':
-            obj = APIObject()
-        elif otype == 'PlainSubject':
-            obj = APIObject()
-        else:
-            obj = APIObject()
-        return obj
-
     def getPage(self, apisession, resource):
-        """return the result for a specific page nr 
+        """return the result for a specific page nr
 
         :param VSDConnecter apisession: the authenticate api session
         :param str resource: page to return as selfUrl
@@ -3359,30 +3444,27 @@ class APIPagination(object):
         if res:
             print('todo')
 
-    def all(self, apisession, itemlist = list()):
+    def items(self, apisession, all = False, itemlist = list()):
         """
         returns all items as list
 
         :param VSDConnecter apisession: the authenticate api session
         :param list itemlist: list of items
         :return: list of all items
-        :rtype: list 
+        :rtype: list
         """
 
         for item in self.items:
             itemlist.append(item)
-        
-        if  self.nextPageUrl:
 
-                return self.all(self.nextPageUrl, itemlist = itemlist)
+        if all:
+            if  self.nextPageUrl:
+                return self.all(self.nextPageUrl, all = True, itemlist = itemlist)
             else:
                 return itemlist
         else:
             return itemlist
-        
-##
-## View Models
-##
+
 
 class APIObjectType(object):
     """
@@ -3428,7 +3510,43 @@ class APIObjectType(object):
         """prints the json to the console, nicely printed"""
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
+    def getObject(self):
+        """
+        create an APIObject depending on the type
 
+        :return: object
+        :rtype: APIObject
+        """
+
+        if self.name == 'RawImage':
+            obj = APIObjectRaw()
+        elif self.name == 'SegmentationImage':
+            obj = APIObjectSeg()
+        elif self.name == 'StatisticalModel':
+            obj = APIObjectSm()
+        elif self.name == 'ClinicalStudyDefinition':
+            obj = APIObjectCtDef()
+        elif self.name == 'ClinicalStudyData':
+            obj = APIObjectCtData()
+        elif self.name == 'SurfaceModel':
+            obj = APIObjectSurfModel()
+        elif self.name == 'GenomicPlatform':
+            obj = APIObjectGenPlatform()
+        elif self.name == 'GenomicSample':
+            obj = APIObjectGenSample()
+        elif self.name == 'GenomicSeries':
+            obj = APIObjectGenSeries()
+        elif self.name == 'Study':
+            obj = APIObjectStudy()
+        elif self.name == 'Subject':
+            obj = APIObjectSubject()
+        elif self.name == 'Plain':
+            obj = APIObject()
+        elif self.name == 'PlainSubject':
+            obj = APIObject()
+        else:
+            obj = APIBasic()
+        return obj
 
 class APIRawImage(object):
     """
@@ -3519,16 +3637,17 @@ class APISegImage(object):
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
 
-# #class APIStatisticalModel(object):
+class APIStatisticalModel(object):
     """
     API class for Statistical model view model - empty
     """
+    pass
 
-## class APIStudyModel(object):
+class APIStudyModel(object):
     """
     API class for Statistical model view model - empty
     """
-
+    pass
 
 
 class APISubject(object):
@@ -3570,10 +3689,11 @@ class APISubject(object):
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
 
 
-## class APICtData(object):
+class APICtData(object):
     """
     API class for clinical trial data view model  - empty
     """
+    pass
 
 class APICtDef(object):
     """
@@ -3629,16 +3749,19 @@ class APIGenPlatform(object):
     """
     API class for  genomic platform view model
     """
+    pass
 
 class APIGenSeries(object):
     """
     API class for genomic series view model
     """
+    pass
 
 class APIGenSample(object):
     """
     API class for genomic sample view model
     """
+    pass
 
 class APIPlain(object):
     """
@@ -3649,6 +3772,7 @@ class APIPlainSubject(object):
     """
     API class for plain subject (undefined subject object) model view model
     """
+    pass
 
 
 
@@ -3693,4 +3817,3 @@ class APIToken(object):
     def show(self):
         """prints the json to the console, nicely printed"""
         print(json.dumps(self.__dict__, sort_keys = True, indent = '    '))
-    
