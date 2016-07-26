@@ -246,16 +246,6 @@ class Preview(APIBaseID):
     thumbnailUrl = URLField()
 
 
-
-class ObjectOntology(APIBase):
-    pass
-
-class Ontology(APIBase):
-    pass
-
-
-
-
 class Pagination(models.Base):
     """
     API class for Pagination results
