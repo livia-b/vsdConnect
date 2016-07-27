@@ -3,13 +3,15 @@
 =======
 INFOS
 =======
-* connectVSD 0.8.1
-* python version: 3.5
-* @author: Michael Kistler 2015, Livia B 2016
+
+- connect 0.8.1
+- python version: 3.5
+- @author: Michael Kistler 2015, Livia B 2016
 
 ========
 CHANGES
 ========
+
 * changed / added JwT auth
 * added models module 
 
@@ -28,7 +30,7 @@ import base64
 import urllib
 import jwt
 
-try: #if PYTHON3:
+try: 
     from urllib.parse import urlparse
     from urllib.parse import quote as urlparse_quote
 except ImportError:
@@ -156,9 +158,12 @@ class VSDConnecter(object):
             self.token = token.tokenValue
             self.s.auth = JWTAuth(self.token)
 
-    ######################################################
-    # session management
-    ########################################################
+
+####################
+#session management
+####################   
+
+
     def _validate_exp(self):
         """
         checks if the session is still valid
@@ -293,7 +298,7 @@ class VSDConnecter(object):
         """
 
         apiObject = vsdModels.APIObject(**response)
-        objectType = apiObject.type.name  # 'RawImage'
+        objectType = apiObject.type.name + 'Object'  # 'RawImageObject class '
         if objectType not in dir(vsdModels):
             logger.warning("Unknown type %s" % objectType)
             return vsdModels.APIObject
@@ -304,7 +309,7 @@ class VSDConnecter(object):
         """
         please describe the purpose here
 
-        # convert  fields to response dict
+        convert  fields to response dict
         how to use it?, cant we use: json.dumps(self.to_struct()) 
         
         :param bool response: ???
@@ -469,7 +474,7 @@ class VSDConnecter(object):
 
         if page.nextPageUrl:
             res = self.getRequest(page.nextPageUrl)
-            nextPage = vsdModels.APIPagination(**res)
+            nextPage = vsdModels.Pagination(**res)
             for nextItem in self.iteratePageItems(nextPage, func=func):
                 yield nextItem
 
@@ -484,7 +489,7 @@ class VSDConnecter(object):
         """
 
         res = self.getRequest(resource)
-        page = vsdModels.APIPagination(**res)
+        page = vsdModels.Pagination(**res)
         for item in self.iteratePageItems(page, func):
             yield item
 
@@ -940,33 +945,26 @@ class VSDConnecter(object):
         :param str search: string to be searched
         :param int oType: ontlogy resouce code, default is FMA (0)
         :param str mode: find exact term (exact) or partial match (default)
-        :returns: a list of ontology objects or a single ontology item
-        :rtype: APIOntolgy
+        :returns: a list of ontology objects
+        :rtype: Ontolgy
         """
         search = urlparse_quote(search)
+        
         if mode == 'exact':
             url = self.url + "ontologies/{0}?$filter=Term%20eq%20%27{1}%27".format(oType, search)
         else:
             url = self.url + "ontologies/{0}?$filter=startswith(Term,%27{1}%27)%20eq%20true".format(oType, search)
 
-        res = self._get(url)
-        if res.status_code == requests.codes.ok:
-            result = list()
-
-            res = res.json()
-
-            if len(res['items']) == 1:
-                onto = vsdModels.Ontology()
-                onto.set(res['items'][0])
-                print('1 ontology term matching the search found')
-                return onto
-            for item in iter(res['items']):
-                onto = vsdModels.Ontology()
-                onto.set(item)
-                result.append(onto)
-            return result
+        res = self.getAllPaginated(url)
+        
+        itemlist = list()
+        
+        if len(res) > 0:
+            for item in res:
+                itemlist.append(vsdModels.OntologyItem(**item))
+            return itemlist
         else:
-            return res.status_code
+            return None
 
     def getOntologyTermByID(self, oid, oType=0):
         """
@@ -1066,8 +1064,7 @@ class VSDConnecter(object):
         res = self.getRequest(resource)
 
         if res:
-            perm = vsdModels.ObjectRight()
-            perm.set(obj=res)
+            perm = vsdModels.ObjectRight(**res)
             return perm
         else:
             return None
@@ -1109,9 +1106,7 @@ class VSDConnecter(object):
         res = self.getRequest(resource)
 
         if res:
-            group = vsdModels.Group()
-            group.set(obj=res)
-            return group
+            return vsdModels.Group(**res)
         else:
             return None
 
