@@ -14,10 +14,9 @@ CHANGES
 * implemented objects as jsonmodels
 
 """
-
+import json
 from jsonmodels import models, fields, errors, validators
-if PYTHON3:
-    from pathlib import Path, PurePath, WindowsPath
+from pathlib import Path, PurePath, WindowsPath
 
 
 ################################################
@@ -531,7 +530,7 @@ class ObjectGroupRightPagination(Pagination):
     """
     API class for pagination result containing object group rights
     """
-    items = fields.ListField(FolderGroupRight)
+    items = fields.ListField(ObjectGroupRight)
 
 class ObjectUserRightPagination(Pagination):
     """
@@ -571,9 +570,13 @@ class APIObject(APIBaseID):
     ontologyItems = fields.EmbeddedField(Pagination)
     ontologyItemRelations = fields.EmbeddedField(Pagination)
     objectPreviews = fields.ListField(Preview)
-    objectGroupRights = fields.ListField(ObjectGroupRight)
-    objectUserRights = fields.ListField(ObjectUserRight)
+    objectGroupRights = fields.ListField(APIBase)
+    objectUserRights = fields.ListField(APIBase)
 
+    ## not part of API: holds the explicit information for objectGroupRights,
+    ## and objectUserRights
+    userRights = fields.ListField(ObjectUserRight)
+    groupRights = fields.ListField(ObjectGroupRight)
 
 
 class ObjectPagination(Pagination):
@@ -595,7 +598,12 @@ class RawImageData(models.Base):
     kilovoltPeak = fields.FloatField()
     spaceBetweenSlices = fields.FloatField()
     modality = fields.EmbeddedField(Modality)
-
+    MRSScore = fields.StringField()
+    timeToMRS = fields.StringField()
+    TICIScaleGrade = fields.StringField()
+    timeSinceStroke = fields.StringField()
+    timeToTreatment = fields.StringField()
+    lysisType = fields.StringField()
 
 class RawImageObject(APIObject):
     """
@@ -661,7 +669,7 @@ class SubjectObject(APIObject):
 
 class ClinicalStudyDataObject(APIObject):
     """
-    API class for clinical trial data view model  - empty
+    API class for clinical trial data view model 
     """
     subject = fields.EmbeddedField(SubjectData)
     clinicalStudyDefinition = fields.EmbeddedField(APIBase)
@@ -850,5 +858,5 @@ resourceTypes = {
     'files': File,
     'folders': Folder,
     'objects': APIObject,
-    'object-links' : ObjectLink
+    'object-links' : ObjectLinks
 }
