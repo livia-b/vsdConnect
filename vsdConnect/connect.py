@@ -274,7 +274,7 @@ class VSDConnecter(object):
         return self._requestsAttempts(self.s.put, resource, *args, **kwargs).json()
 
     def _delete(self, resource, *args, **kwargs):  # reimplements VSDConnect.postRequest
-        return self._requestsAttempts(self.s.delete, resource, *args, **kwargs).json()
+        return self._requestsAttempts(self.s.delete, resource, *args, **kwargs)#.json()
 
     def _post(self, resource, *args, **kwargs):
         # should I avoid multiplt attempts? not idempotent, no multiple  attempts
@@ -593,10 +593,9 @@ class VSDConnecter(object):
         :return: the folder
         :rtype: APIFolder
         """
-        resource = self.parseUrl(resource, 'folders')
-        res = self.getRequest(resource)
-        folder = vsdModels.Folder(**res)
-        return folder
+        res = self.getRequest(self.parseUrl(resource, 'folders'))
+        return vsdModels.Folder(**res)
+   
 
     def getObjectFilesHash(self, obj):
         """
@@ -1487,7 +1486,7 @@ class VSDConnecter(object):
 
         res = self.putRequest('folders', data=folder.to_struct())
 
-    def postObjectRights(self, obj, group, perms, isuser=False):
+    def postObjectRightsOld(self, obj, group, perms, isuser=False):
         """
         translate a set of permissions and a group into the appropriate format and add it to the object
 
@@ -1576,6 +1575,27 @@ class VSDConnecter(object):
 
         return objRight
 
+    def postObjectRights(self, obj, target):
+        """
+        the permission defined in userRights or groupRights are pushed to the Database
+        
+        :param str target: either 'group' or 'user'
+        :param APIObject obj: a object containing the permission
+        """
+
+        if target == 'user':
+            for item in obj.userRights:
+                res = self.postRequest(
+                    'object-user-rights',
+                    data=item.to_struct()
+                )
+        else:
+            for item in obj.groupRights:
+                res = self.postRequest(
+                    'object-group-rights',
+                    data=item.to_struct()
+                )
+
     def addLink(self, obj1, obj2):
         """ add an object link
 
@@ -1589,31 +1609,28 @@ class VSDConnecter(object):
         link.validate()
         return self.postRequest('object-links', data=link.to_struct())
 
-    def addOntologyToObject(self, obj, ontology, pos=0):
-        """ add an ontoly term to an object
+    def addOntologyToObject(self, obj):
+        """ add ontology terms to an object
 
-        :param APIBase obj: basic object
-        :param Ontology ontology: ontology object
-        :param int pos: position of the ontology term, default = 1
-        :return: returns true if successfully added
-        :rtype: bool
+        :param APIObject obj: a API object
+        
         """
-
-        isset = False
-        if isinstance(pos, int):
-            onto = vsdModels.ObjectOntology()
-            onto.position = pos
-            onto.object = dict([('selfUrl', obj.selfUrl)])
-            onto.ontologyItem = dict([('selfUrl', ontology.selfUrl)])
-            onto.type = ontology.type
-
-            res = self.postRequest('object-ontologies/{0}'.format(ontology.type), data=onto.to_struct())
-            if res:
-                isset = True
-        else:
-            print('position needs to be a number (int)')
-
-        return isset
+        i = -1
+        for item in obj.ontologyItems.items:
+            i = i + 1
+            ana = vsdModels.ObjectOntology(
+                type=vsdModels.OntologyItem(**item).type,
+                position=i,
+                ontologyItem=vsdModels.APIBase(selfUrl=vsdModels.OntologyItem(**item).selfUrl),
+                object=vsdModels.APIBase(selfUrl=obj.selfUrl)
+            )
+            print(ana.to_struct())
+            self.postRequest(
+                'object-ontologies/{0}'.format(
+                    vsdModels.OntologyItem(**item).type
+                ),
+                data=ana.to_struct())
+            
 
     def deleteFolder(self, folder, recursive=False):
         """remove a folder (Folder)

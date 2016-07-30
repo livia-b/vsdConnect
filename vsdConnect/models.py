@@ -19,6 +19,7 @@ from jsonmodels import models, fields, errors, validators
 from pathlib import Path, PurePath, WindowsPath
 
 
+
 ################################################
 #Custom validators
 ################################################
@@ -69,11 +70,13 @@ class PaginationParameter(models.Base):
     """
     pagination parameters
 
+    use 10000 for unlimited usage of eg dicom series (local only, not working on API)
+
     """
     
     rpp = fields.IntField(
         required=True,
-        validators=ListValidator([10, 25, 50, 100, 250, 500])
+        validators=ListValidator([10, 25, 50, 100, 250, 500, 10000]) 
         )
 
     page = fields.IntField(
@@ -176,7 +179,6 @@ class APIBase(models.Base):
         """
         # takes existing fields and sets its value from the input data
         for name, field in self.iterate_over_fields():
-            print('name: {0} - value: {1} - type: {2}'. format(name, data[name], type(field)))
             field.__set__(self, data[name])
 
   
@@ -266,8 +268,11 @@ class Pagination(models.Base):
         firstItem = self.items[0]
         return firstItem.selfUrl
 
-
-
+class APIBasePagination(Pagination):
+    """
+    class for pagination items of type APIBase
+    """
+    items = fields.ListField(APIBase)
 
 ################################################
 #FILES
@@ -295,6 +300,129 @@ class Folder(APIBaseID):
     folderGroupRights = fields.ListField(APIBase)
     folderUserRights = fields.ListField(APIBase)
     containedObjects = fields.ListField(APIBase)
+
+    def get(self, apisession):
+        """
+        get the folder object from the API
+
+        :param connectVSD apisession: the API session
+        :return: the folder 
+        :rtype: Folder
+        """
+        res = apisession._get(self.selfUrl)
+        return Folder(**res)
+
+    def get_partent(self, apisession):
+        """
+        return the parent Folder
+
+        :param connectVSD apisession: the API session
+        :return: the parent Folder
+        :rtype: Folder
+        """
+
+        return apisession.getFolder(parentFolder.selfUrl)
+
+    def get_objects(self, apisession):
+        """
+        return the APIobject contained in the folder (convert APIBase to the correct Object)
+
+        :param connectVSD apisession: the API session
+        :return: list of APIObjects
+        :rtype: list
+        """
+        itemlist = list()
+
+        if self.containedObjects:
+
+            for item in self.containedObjects:
+                itemlist.append(APIObject(selfUrl=item.selfUrl).get(apisession))
+                
+            return itemlist
+        else:
+            print('the folder does not have any contained objects')
+            return None
+
+    def get_child_folders(self, apisession):
+        """
+        return the Folders contained in the folder (convert APIBase Folder)
+
+        :param connectVSD apisession: the API session
+        :return: list of Folder
+        :rtype: list
+        """
+        itemlist = list()
+
+        if self.childFolders:
+
+            for item in self.childFolders:
+            
+                itemlist.append(Folder(selfUrl=item.selfUrl).get(apisession))
+                
+            return itemlist
+        else:
+            print('the folder does not have any child folder')
+            return None
+
+    def get_content(self, apisession, recursive=False, mode='b'):
+        """
+        get the objects and folder contained in the given folder. can be called recursive to travel and return all objects
+
+        :param connectVSD apisession: the API session
+        :param bool recursive:  travel the folder structure recursively or not (default)
+        :param str mode: what to return: only objects (f), only folders (d) or both (b) folders and objects
+        :return content: dictionary with folders (APIBase) and object (APIBase)
+        :rtype: dict of APIBase
+        """
+
+        objectmode = False
+        foldermode = False
+
+        if mode == 'f':
+            objectmode = True
+
+        elif mode == 'd':
+            foldermode = True
+
+        elif mode == 'b':
+            objectmode = True
+            foldermode = True
+        else:
+            print('mode {0} not supported'.format(mode))
+
+        folders = self.get_child_folders(apisession)
+
+
+        temp = dict([('folder', self), ('object', None)])
+
+
+        if foldermode:
+            content = list([temp])
+        else:
+            content = list()
+
+        if objectmode:
+            objects = self.get_objects(apisession)
+
+            if objects is not None:
+                for item in objects:
+                    temp = dict([('folder', self), ('object', item)])
+                    content.append(temp)
+
+        if folders is not None:
+            if recursive:
+                for fold in folders:
+                    content.extend(fold.get_content(apisession=apisession, mode=mode, recursive=True))
+
+            else:
+                if foldermode:
+                    for fold in folders:
+                        temp = dict([('folder', fold), ('object', None)])
+                        content.append(temp)
+
+        return content
+
+
 
 class FolderPagination(Pagination):
     """
@@ -441,7 +569,12 @@ class ObjectLinks(APIBaseID):
     object2 = fields.EmbeddedField(APIBase)
     description = fields.StringField()
 
-
+    def post(self, apisession):
+        """
+        create the link for 2 objects
+        :param connectVSD apisession: the connection to the API
+        """
+        apisession.postRequest('object-links', data=self.to_struct())
 
 ################################################
 #OBJECTS ONTOLOGY & ONTOLOGY
@@ -564,7 +697,7 @@ class APIObject(APIBaseID):
     type = fields.EmbeddedField(ObjectType)
     downloadUrl = URLField()
     license = fields.EmbeddedField(APIBase)
-    files = fields.EmbeddedField(Pagination)
+    files = fields.EmbeddedField(APIBasePagination)
     linkedObjects = fields.EmbeddedField(Pagination)
     linkedObjectRelations = fields.EmbeddedField(Pagination)
     ontologyItems = fields.EmbeddedField(Pagination)
@@ -577,6 +710,134 @@ class APIObject(APIBaseID):
     ## and objectUserRights
     userRights = fields.ListField(ObjectUserRight)
     groupRights = fields.ListField(ObjectGroupRight)
+
+
+    def _create(self, response=None, **kwargs):
+        
+        if response is None:
+            response = kwargs
+        objType = self._get_object_type(response)
+    
+        return objType
+
+
+    def _get_object_type(self, response):
+        """
+        create an APIObject depending on the type
+
+        :param json response: object data
+        :return: object
+        :rtype: APIObject
+        """
+
+        obj = APIObject(**response)  
+        otype = obj.type.name + 'Object'
+        if not globals()[otype]:
+            print("Unknown type %s" % otype)
+
+        return globals()[otype](**response) #eval() works, but security issues
+        
+
+    def get(self, apisession):
+        """
+        get the object from the API and convert to correct object_type object
+        :param connectVSD apisession: the connection to the API
+        """
+        return self._create(apisession._get(self.selfUrl))
+      
+        #self = apisession.createObject(apisession._get(self.selfUrl))
+
+    def update(self, apisession):
+        """update an objects information
+
+        :param connectVSD apisession: the connection to the API
+        :return: the updated object
+        :rtype: APIObject
+        """
+
+        res = apisession.putRequest(self.selfUrl, data=self.to_struct())
+
+        if res:
+            self = apisession.createObject(res)
+        else:
+            print('failed to update the object')  
+
+    def publish(self, apisession):
+        """
+        publish the object
+        
+        :param connectVSD apisession: the connection to the API
+        """
+        return apisession._put(self.selfUrl + '/publish')
+
+    def copy_to_folder(self, apisession, folder):
+        """
+        copy object to a folder
+
+        :param Folder folder: the target folder object
+        """
+        objSelfUrl = APIBase(**self.to_struct())
+
+        if not objSelfUrl in folder.containedObjects:
+            folder.containedObjects.append(objSelfUrl)
+            return apisession.putRequest('folders', data=folder.to_struct())
+
+    def remove(self, apisession, folder):
+        """
+        remove the object from the target folder
+
+        :param Folder folder: the target folder object
+        :param connectVSD apisession: the connection to the API
+        """
+        pass
+
+    def delete(self, apisession):
+        """
+        delete unpublished object
+        :param connectVSD apisession: the connection to the API
+        """
+
+        return apisession._delete(self.selfUrl)
+   
+    def  add_object_rights(self, apisession):
+        """
+        the permission defined in userRights or groupRights are pushed to the Database
+        :param connectVSD apisession: the connection to the API
+        """
+
+        if len(self.userRights) > 0:
+            for item in self.userRights:
+                res = apisession.postRequest(
+                    'object-user-rights',
+                    data=item.to_struct()
+                )
+        if len(self.groupRights) > 0:
+            for item in self.groupRights:
+                res = apisession.postRequest(
+                    'object-group-rights',
+                    data=item.to_struct()
+                )
+
+    def add_ontology_item(self, apisession):
+        """ add ontology terms to an object
+
+        :param connectVSD apisession: the connection to the API
+        """
+        i = -1
+        for item in self.ontologyItems.items:
+            i = i + 1
+            ana = ObjectOntology(
+                type=OntologyItem(**item).type,
+                position=i,
+                ontologyItem=APIBase(selfUrl=OntologyItem(**item).selfUrl),
+                object=APIBase(selfUrl=self.selfUrl)
+            )
+
+            apisession.postRequest(
+                'object-ontologies/{0}'.format(
+                    OntologyItem(**item).type
+                ),
+                data=ana.to_struct())
 
 
 class ObjectPagination(Pagination):
@@ -817,8 +1078,6 @@ class DynamicSearchCondition(models.Base):
     comparisonOperator = fields.EmbeddedField(DynamicSearchComparisonOperator)
     inputItem = fields.EmbeddedField(DynamicSearchInputItem)
 
-
-
 class DynamicSearchGroup(models.Base):
     """docstring"""
 
@@ -860,3 +1119,4 @@ resourceTypes = {
     'objects': APIObject,
     'object-links' : ObjectLinks
 }
+
