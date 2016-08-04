@@ -3,15 +3,18 @@
 =======
 INFOS
 =======
-* connectVSD 0.8.1
-* python version: 3
-* @author: Michael Kistler 2015
+
+- connect 0.8.1
+- python version: 3.5
+- @author: Michael Kistler 2015, Livia Barazzetti 2016
 
 ========
 CHANGES
 ========
+
 * changed / added JwT auth
-* object-types added
+* added models module 
+
 
 """
 
@@ -23,15 +26,17 @@ import hashlib
 from datetime import datetime
 from calendar import timegm
 import base64
+import shutil
 
 import urllib
 import jwt
 
-try: #if PYTHON3:
+try: 
     from urllib.parse import urlparse
+    from urllib.parse import urlsplit
     from urllib.parse import quote as urlparse_quote
 except ImportError:
-    from urlparse import urlparse
+    from urlparse import urlparse, urlsplit
     from urllib import quote as urlparse_quote
 
 import json
@@ -155,9 +160,12 @@ class VSDConnecter(object):
             self.token = token.tokenValue
             self.s.auth = JWTAuth(self.token)
 
-    ######################################################
-    # session management
-    ########################################################
+
+####################
+#session management
+####################   
+
+
     def _validate_exp(self):
         """
         checks if the session is still valid
@@ -201,7 +209,7 @@ class VSDConnecter(object):
         request the JWT token from the server using Basic Auth
 
         :return: token - a authentication token or None
-        :rtype: APIToken or None
+        :rtype: Token or None
         """
 
         token = False
@@ -211,7 +219,7 @@ class VSDConnecter(object):
         except:
             logger.error(res)
             raise
-        token = vsdModels.APIToken(**res.json())
+        token = vsdModels.Token(**res.json())
         try:
             payload = jwt.decode(token.tokenValue, verify=False)
 
@@ -267,46 +275,28 @@ class VSDConnecter(object):
     def _put(self, resource, *args, **kwargs):  # reimplements VSDConnect.putRequest
         return self._requestsAttempts(self.s.put, resource, *args, **kwargs).json()
 
-    def _delete(self, resource, *args, **kwargs):  # reimplements VSDConnect.postRequest
-        return self._requestsAttempts(self.s.delete, resource, *args, **kwargs).json()
+    def _delete(self, resource, *args, **kwargs):
+        return self._requestsAttempts(self.s.delete, resource, *args, **kwargs)#.json()
 
-    def _post(self, resource, *args, **kwargs):
+    def _post(self, resource, *args, **kwargs): # reimplements VSDConnect.postRequest
         # should I avoid multiplt attempts? not idempotent, no multiple  attempts
         return self._requestsAttempts(self.s.post, resource, *args, **kwargs).json()
 
-    def _options(self, resource, *args, **kwargs):  # reimplements VSDConnect.getRequest
+    def _options(self, resource, *args, **kwargs):
         return self._requestsAttempts(self.s.options, resource, *args, **kwargs).json()
 
     #################################################
     # api objects handling
     ################################################
 
-
-    def getAPIObjectType(self, response):
-        """
-        create an APIObject depending on the type
-
-        :param json response: object data
-        :return: object
-        :rtype: APIObject
-        """
-
-        apiObject = vsdModels.APIObject(**response)
-        objectType = apiObject.type.name  # 'RawImage'
-        if objectType not in dir(vsdModels):
-            logger.warning("Unknown type %s" % objectType)
-            return vsdModels.APIObject
-        obj = getattr(vsdModels, objectType)
-        return obj
-
-    def createAPIObject(self, response=None, **kwargs):
-        # convert  fields to response dict
-        if response is None:
-            response = kwargs
-        objType = self.getAPIObjectType(response)
-        return objType(**response)
-
     def parseUrl(self, resource, type):
+        """
+        get the full url given the resource, making sure it's the provided type
+
+        :param str resource: url to the resource (can parse id or full url)
+        :param str type: type of the api resource (folders, objects etc)
+        :rtype  str  fullUrl for the resource
+        """
         try:
             rId = int(resource)
             resource = "%s/%s" % (type, rId)
@@ -364,6 +354,27 @@ class VSDConnecter(object):
         return self._get(self.fullUrl(resource), params=params)
 
 
+    def downloadZip(self, resource, fp):
+        """
+        download the zipfile into the given file (fp)
+
+        :param str resource: download URL
+        :param Path fp:  filepath
+        :return: None or status_code ok (200)
+        :rtype: int
+        """
+
+        self._stayAlive()
+
+        res = self.s.get(self.fullUrl(resource), stream = True)
+        if res.ok:
+            with fp.open('wb') as f:
+                shutil.copyfileobj(res.raw, f)
+            return res.status_code
+        else:
+            return None
+
+
     def downloadObject(self, obj, workingDir=None):
         """
         download the object into a ZIP file based on the object name and the working directory
@@ -382,9 +393,9 @@ class VSDConnecter(object):
 
     def downloadObjectPreviewImages(self, object, thumbnail=True):
         field = 'thumbnailUrl' if thumbnail else 'imageUrl'
-        embeddedImages = []
+        embeddedImages = list()
         for i, preview in enumerate(object.objectPreviews):
-            p_obj = vsdModels.APIPreview(**self.getRequest(preview.selfUrl))
+            p_obj = vsdModels.Preview(**self.getRequest(preview.selfUrl))
             img = self._requestsAttempts(self.s.get, getattr(p_obj, field))
             embeddedImages.append(base64.b64encode(img.content))
         return embeddedImages
@@ -395,21 +406,21 @@ class VSDConnecter(object):
         """
 
         res = self.getRequest(resource)
-        page = vsdModels.APIPagination(**res)
+        page = vsdModels.Pagination(**res)
         return page
 
     def getAllPaginated(self, resource, itemlist=list()):
         """
         returns all items as list
 
-        :param str rource: resource path
+        :param str resource: resource path
         :param list itemlist: list of items
         :return: list of items
-        :rtype: list of APIPagination objects
+        :rtype: list of Pagination objects
         """
 
         res = self.getRequest(resource)
-        page = vsdModels.APIPagination(**res)
+        page = vsdModels.Pagination(**res)
         for item in page.items:
             itemlist.append(item)
         if page.nextPageUrl:
@@ -419,12 +430,12 @@ class VSDConnecter(object):
 
     def iteratePageItems(self, page, func=dict):
         """
-        returns all items as list
+        generator that returns all items
 
-        :param str resource: resource path
+        :param Pagination: Pagination object
         :param func: function for converting resource
         :return: iterator of items
-        :rtype: list of dict or model object
+        :rtype: iterator  of dict or model object (depending on func)
         """
 
         for item in page.items:
@@ -432,7 +443,7 @@ class VSDConnecter(object):
 
         if page.nextPageUrl:
             res = self.getRequest(page.nextPageUrl)
-            nextPage = vsdModels.APIPagination(**res)
+            nextPage = vsdModels.Pagination(**res)
             for nextItem in self.iteratePageItems(nextPage, func=func):
                 yield nextItem
 
@@ -447,15 +458,24 @@ class VSDConnecter(object):
         """
 
         res = self.getRequest(resource)
-        page = vsdModels.APIPagination(**res)
+        page = vsdModels.Pagination(**res)
         for item in self.iteratePageItems(page, func):
             yield item
 
     def getObjects(self, idList=None):
+        """
+        retrieves list of objects (restricting to idList if provided)
+
+        :param : idList: list of Ids. If not specified, all objects are returned.
+        If it is "published" or "unpublished", all the published and unpublished objects are returned, respectively
+        :return:
+        :rtype: list of Objects (or derived classes as appropriate)
+        """
+
         if idList is None:
             idList = ''
         if idList in ['', 'published', 'unpublished']:
-            return self.iterateAllPaginated('objects/%s' % idList, func=self.createAPIObject)
+            return self.iterateAllPaginated('objects/%s' % idList, func=vsdModels.APIObject._create)
 
         items = []
         for curId in idList:
@@ -471,7 +491,7 @@ class VSDConnecter(object):
         :raises: ValueError
         """
 
-        selfURL_path = urllib.parse.urlsplit(selfURL).path
+        selfURL_path = urlsplit(selfURL).path
         oID = Path(selfURL_path).name
         try:
             r = int(oID)
@@ -481,50 +501,73 @@ class VSDConnecter(object):
         return r
 
     def getResourceTypeAndId(self, url):
+        """
+        Parse a selfUrl and get the resource type and id
+        >> conn.getResourceTypeAndId("https://demo.virtualskeleton.ch/api/objects/1")
+        ['objects', '1']
+        :param:
+        :return: (str, str)
+        :rtype: 
+        """
         return url.rsplit('/', 2)[-2:]
 
     def _instantiateResource(self, res):
+        """
+        Dynamically instantiate the appropriate object from a json response
+        :param res: json response
+        :return: object from vsdModels
+        """
+
+
         try:
-            pagination = vsdModels.APIPagination(**res)
+            pagination = vsdModels.Pagination(**res)
             pagination.validate() #will fail if it doesno't have totalCount
             return pagination
         except:
-            resourcetype, id = self.getResourceTypeAndId(res['selfUrl'])
+            resourcetype, oid = self.getResourceTypeAndId(res['selfUrl'])
             if resourcetype == 'objects':
-                return self.createAPIObject(res)
+                return vsdModels.APIObject._create(res)
+            #e.g FolderLinks
             model = vsdModels.resourceTypes[resourcetype](**res)
             return model
 
     def getResource(self, url):
+        """
+        Dynamically instantiate the appropriate object from a selfUrl
+
+        :param: str url
+        :return: object from vsdModels
+        :rtype: 
+        """
+
         res = self.getRequest(url)
         return self._instantiateResource(res)
 
 
 
     def getObject(self, resource):
-        """retrieve an object based on the objectID
+        """retrieve an object based on the objectID/selfUrl
 
         :param int,str resource: (str) selfUrl of the object or the (int) object ID
         :return: the object
-        :rtype: APIObject
+        :rtype: APIObject (or derived class)
         """
         resource = self.parseUrl(resource, 'objects')
 
         res = self.getRequest(resource)
-        obj = self.createAPIObject(res)
+        obj = vsdModels.APIObject._create(res)
         return obj
 
     def getFolder(self, resource):
-        """retrieve an folder based on the folderID
+        """retrieve an folder based on the folderID/selfUrl
 
         :param int,str resource: (str) selfUrl of the folder or the (int) folder ID
         :return: the folder
         :rtype: APIFolder
         """
-        resource = self.parseUrl(resource, 'folders')
-        res = self.getRequest(resource)
-        folder = vsdModels.APIFolder(**res)
-        return folder
+        res = self.getRequest(self.parseUrl(resource, 'folders'))
+        return vsdModels.Folder(**res)
+   
 
     def getObjectFilesHash(self, obj):
         """
@@ -544,23 +587,34 @@ class VSDConnecter(object):
 
         return filehash
 
-    def walkFolder(self, folderUrl, topdown=True):
-        # similar to os.walk
-        folderObject = self.getFolder(folderUrl)
+    def walkFolder(self, folder, topdown=True):
+        """
+        Generate the folder object and the file names in a directory tree by walking the tree either top-down or bottom-up.
+        For each directory in the tree rooted at directory top (including top itself), it yields a 3-tuple
+        (folderObject, dirnames, containedOnbjects).
+        compare to os.walk
+        :param folder: selfUrl of the top folder (or folder object)
+        :return: (folderObject, dirnames, containedOnbjects)
+        :rtype: (vsdmodels.Folder, list(vsdmodels.APIBasic), list(vsdmodels.APIBasic))
+        """
+        if isinstance(folder, basestring):
+            folderObject = self.getFolder(folder)
+        else:
+            folderObject = folder
         dirs = folderObject.childFolders
-        nondirs = folderObject.containedObjects
+        containedObjects = folderObject.containedObjects
         if dirs is None:
             dirs = []
-        if nondirs is None:
-            nondirs = []
+        if containedObjects is None:
+            containedObjects = []
         if topdown:
-            yield folderObject, dirs, nondirs
+            yield folderObject, dirs, containedObjects
 
         for nextDir in dirs:
             for x in self.walkFolder(nextDir.selfUrl):
                 yield x
         if not topdown:
-            yield folderObject, dirs, nondirs
+            yield folderObject, dirs, containedObjects
 
     def checkFileInObject(self, obj, fp):
         """
@@ -609,86 +663,9 @@ class VSDConnecter(object):
             url = self.fullUrl(resource) + '?$filter=startswith(Term,%27{0}%27)%20eq%20true'.format(search)
 
         req = self.getRequest(url)
-
-    def showObjectInformation(self, obj):
-        """
-        display the object information user readable format
-
-        :param APIObject obj: object
-        """
-
-        print('---------General Information ----------')
-        if obj.description is not None:
-            print('description:', obj.description)
-        if obj.name is not None:
-            print('name: ', obj.name)
-        if obj.createdDate is not None:
-            print('creation date: ', obj.createdDate)
-        if obj.id is not None:
-            print('id: ', obj.id)
-        if obj.type is not None:
-            print('type: ', obj.type)
-
-        print('todo')
-
-        if obj.modality is not None:
-            print('---------Modality----------')
-            basic = vsdModels.APIBasic()
-            basic.set(obj=obj.modality)
-            mod = self.getModality(basic.selfUrl)
-
-            print('name: ', mod.name)
-            print('description', mod.description)
-            print('selfUrl: ', mod.selfUrl)
-            print('id: ', mod.id)
-
-        if obj.ontologyItems is not None:
-            print('---------Ontology items----------')
-            for onto in obj.ontologyItems:
-                basic = vsdModels.APIBasic()
-                basic.set(obj=onto)
-                ontology = self.getOntologyItem(basic.selfUrl)
-
-                print('Term: ', ontology.term)
-                print('type', ontology.type)
-                print('selfUrl: ', ontology.selfUrl)
-                print('id: ', ontology.id)
-
-        if obj.license is not None:
-            print('---------License----------')
-            basic = vsdModels.APIBasic()
-            basic.set(obj=obj.license)
-            lic = self.getLicense(basic.selfUrl)
-            print('name: \t\t', lic.name)
-            print('description:\t', lic.description)
-            print('selfUrl:\t\t', lic.selfUrl)
-            print('id:\t\t\t', lic.id)
-
-        print('---------User Rights----------')
-        ur = self.getObjectUserRights(obj)
-        if ur:
-            for u in ur:
-                user = self.getUser(u.relatedUser['selfUrl'])
-                print('user:')
-                print(user.to_struct())
-                print('rights:')
-                for r in u.relatedRights:
-                    print(self.getObjectRight(r['selfUrl']).to_struct())
-        else:
-            print('nothing here')
-
-        print('---------GroupRights----------')
-        gr = self.getObjectGroupRights(obj)
-        if gr:
-            for g in gr:
-                group = self.getGroup(g.relatedGroup['selfUrl'])
-                print('group:')
-                print(group.to_struct())
-                print('rights:')
-                for r in g.relatedRights:
-                    print(self.getObjectRight(r['selfUrl']).to_struct())
-        else:
-            print('nothing here')
+        return req
+        #return req.json()
+    
 
     def getFile(self, resource):
         """
@@ -701,7 +678,7 @@ class VSDConnecter(object):
         resource = self.parseUrl(resource, 'files')
 
         res = self.getRequest(resource)
-        fObj = vsdModels.APIFile(**res)
+        fObj = vsdModels.File(**res)
         return fObj
 
     def getObjectFiles(self, obj):
@@ -778,6 +755,7 @@ class VSDConnecter(object):
 
         :param str search: term to search for
         :param str mode: search for partial match ('default') or exact match ('exact')
+        :param bool squeeze: if True, if there is only one result return the result and not a list
         :return: list of folder objects APIFolders
         :rtype: list of APIFolders
         """
@@ -792,7 +770,7 @@ class VSDConnecter(object):
 
             url = self.url + "folders?$filter=startswith(Name,%27{0}%27)%20eq%20true".format(search)
 
-        result = list(self.iterateAllPaginated(url, vsdModels.APIFolder))
+        result = list(self.iterateAllPaginated(url, vsdModels.Folder))
 
         if len(result) == 1 and squeeze:
             folder = result[0]
@@ -816,7 +794,7 @@ class VSDConnecter(object):
         if folder.childFolders:
 
             for fold in folder.childFolders:
-                basic = vsdModels.APIBasic(**fold)
+                basic = vsdModels.APIBase(**fold)
                 f = self.getFolder(basic.selfUrl)
                 folderlist.append(f)
             return folderlist
@@ -838,7 +816,7 @@ class VSDConnecter(object):
         if folder.containedObjects:
 
             for obj in folder.containedObjects:
-                basic = vsdModels.APIBasic(**obj)
+                basic = vsdModels.APIBase(**obj)
                 o = self.getObject(basic.selfUrl)
                 objlist.append(o)
             return objlist
@@ -851,15 +829,12 @@ class VSDConnecter(object):
         retrieve a list of modalities objects (APIModality)
 
         :return: list of available modalities
-        :rtype: list of APIModality
+        :rtype: list of Modality
         """
 
         modalities = list()
-        items = self.iterateAllPaginated('modalities')
-        if items:
-            for item in items:
-                modality = vsdModels.APIModality(**item)
-                modalities.append(modality)
+        modalities = list(self.iterateAllPaginated('modalities'), 
+                          vsdModels.Modality)
         return modalities
 
     def getModality(self, resource):
@@ -868,48 +843,15 @@ class VSDConnecter(object):
 
         :param int,str resource: resource path to the of the modality
         :return: the modality object
-        :rtype: APIModality
+        :rtype: Modality
         """
 
         resource = self.parseUrl(resource, 'modalities')
 
         res = self.getRequest(resource)
-        mod = vsdModels.APIModality(**res)
+        return vsdModels.Modality(**res)
 
-    def readFolders(self, folderList):
-        # first pass: create one entry for each folder:
-        folderHash = {}
-        for folder in folderList['items']:
-            ID = folder['id']
-            folderHash[ID] = vsdModels.APIFolder()
-            folderHash[ID].ID = ID
-            folderHash[ID].name = folder['name']
-            folderHash[ID].childFolders = []
 
-            # second pass: create references to parent and child folders
-        for folder in folderList['items']:
-            ID = folder['id']
-            if (folder['childFolders'] != None):
-                # print (folder['childFolders'],ID)
-                for child in folder['childFolders']:
-                    childID = int(child['selfUrl'].split("/")[-1])
-                    if (folderHash.has_key(childID)):
-                        folderHash[ID].childFolders.append(folderHash[childID])
-            if (folder['parentFolder'] != None):
-                parentID = int(folder['parentFolder']['selfUrl'].split("/")[-1])
-                if (folderHash.has_key(parentID)):
-                    folderHash[ID].parentFolder = folderHash[parentID]
-            if (not folder['containedObjects'] == None):
-                folderHash[ID].containedObjects = {}
-                for obj in folder['containedObjects']:
-                    objID = obj['selfUrl'].split("/")[-1]
-                    folderHash[ID].containedObjects[objID] = obj['selfUrl']
-
-        # third pass: gett full path names in folder hierarchy
-        for key, folder in folderHash.iteritems():
-            folder.getFullName()
-
-        return folderHash
 
     def getFolderContent(self, folder, recursive=False, mode='d'):
         """
@@ -918,8 +860,8 @@ class VSDConnecter(object):
         :param APIFolder folder: the folder to be read
         :param bool recursive:  travel the folder structure recursively or not (default)
         :param str mode: what to return: only objects (o), only folders (f) or default (d) folders and objects
-        :return content: dictionary with folders (APIFolder) and object (APIObjects)
-        :rtype: dict of APIFolder and APIObject
+        :return content: dictionary with folders (APIBase) and object (APIBase)
+        :rtype: dict of APIBase
         """
 
         objectmode = False
@@ -974,33 +916,26 @@ class VSDConnecter(object):
         :param str search: string to be searched
         :param int oType: ontlogy resouce code, default is FMA (0)
         :param str mode: find exact term (exact) or partial match (default)
-        :returns: a list of ontology objects or a single ontology item
-        :rtype: APIOntolgy
+        :returns: a list of ontology objects
+        :rtype: Ontolgy
         """
         search = urlparse_quote(search)
+        
         if mode == 'exact':
             url = self.url + "ontologies/{0}?$filter=Term%20eq%20%27{1}%27".format(oType, search)
         else:
             url = self.url + "ontologies/{0}?$filter=startswith(Term,%27{1}%27)%20eq%20true".format(oType, search)
 
-        res = self._get(url)
-        if res.status_code == requests.codes.ok:
-            result = list()
+        res = list(self.getAllPaginated(url))
+        
+        itemlist = list()
 
-            res = res.json()
-
-            if len(res['items']) == 1:
-                onto = vsdModels.APIOntology()
-                onto.set(res['items'][0])
-                print('1 ontology term matching the search found')
-                return onto
-            for item in iter(res['items']):
-                onto = vsdModels.APIOntology()
-                onto.set(item)
-                result.append(onto)
-            return result
+        if len(res) > 0:
+            for item in res:
+                itemlist.append(vsdModels.OntologyItem(**item))
+            return itemlist
         else:
-            return res.status_code
+            return None
 
     def getOntologyTermByID(self, oid, oType=0):
         """
@@ -1014,7 +949,7 @@ class VSDConnecter(object):
 
         url = "ontologies/{0}/{1}".format(oType, oid)
         req = self.getRequest(url)
-        return req.json()
+        return req
 
     def getOntologyItem(self, resource, oType=0):
         """
@@ -1023,40 +958,40 @@ class VSDConnecter(object):
         :param int,str resource: resource path to the of the ontology item
         :param int oType: ontology type
         :return onto: the ontology item object
-        :rtype: APIOntology
+        :rtype: Ontology
         """
 
         if isinstance(resource, int):
             resource = 'ontology/{0}/{1}'.format(resource, oType)
 
         res = self.getRequest(resource)
-        onto = vsdModels.APIOntology(**res)
+        onto = vsdModels.Ontology(**res)
 
         return onto
 
     def getLicenseList(self):
-        """ retrieve a list of the available licenses (APILicense)
+        """ retrieve a list of the available licenses (License)
 
 
         :return: list of available license objects
-        :rtype: list of APILicense
+        :rtype: list of License
         """
 
         res = self.getRequest('licenses')
         licenses = list()
         if res:
             for item in iter(res['items']):
-                lic = vsdModels.APILicense(**item)
+                lic = vsdModels.License(**item)
                 licenses.append(lic)
 
         return licenses
 
     def getLicense(self, resource):
-        """ retrieve a license (APILicense)
+        """ retrieve a license (License)
 
         :param int,str resource: resource path to the of the license
         :return license: the license object
-        :rtype: APILicense
+        :rtype: License
         """
 
         if isinstance(resource, int):
@@ -1064,17 +999,17 @@ class VSDConnecter(object):
 
         res = self.getRequest(resource)
         if res:
-            license = vsdModels.APILicense(**res)
+            license = vsdModels.License(**res)
 
             return license
         else:
             return None
 
     def getObjectRightList(self):
-        """ retrieve a list of the available base object rights (APIObjectRight)
+        """ retrieve a list of the available base object rights (ObjectRight)
 
         :return: list of object rights
-        :rtype: list of APIObjectRight
+        :rtype: list of ObjectRight
         """
 
         res = self.getRequest('object_rights')
@@ -1082,17 +1017,17 @@ class VSDConnecter(object):
 
         if res:
             for item in iter(res['items']):
-                perm = vsdModels.APIObjectRight(**item)
+                perm = vsdModels.ObjectRight(**item)
                 permission.append(perm)
 
         return permission
 
     def getObjectRight(self, resource):
-        """ retrieve a  object rights object (APIObjectRight)
+        """ retrieve a  object rights object (ObjectRight)
 
         :param int,str resource: resource to the permission id (int) or selfurl (str)
         :return: perm object
-        :rtype: APIObjectRight
+        :rtype: ObjectRight
         """
 
         if isinstance(resource, int):
@@ -1100,8 +1035,7 @@ class VSDConnecter(object):
         res = self.getRequest(resource)
 
         if res:
-            perm = vsdModels.APIObjectRight()
-            perm.set(obj=res)
+            perm = vsdModels.ObjectRight(**res)
             return perm
         else:
             return None
@@ -1113,27 +1047,28 @@ class VSDConnecter(object):
         :param int rpp: results per page
         :param int page: page number to display
         :return: list of group objects
-        :rtype: APIGroup
+        :rtype: Group
         :return: pagination object
-        :rtype: APIPagination
+        :rtype: Pagination
         """
 
         groups = list()
         res = self.getRequest(resource, rpp, page)
-        ppObj = vsdModels.APIPagination(**res)
+        ppObj = vsdModels.Pagination(**res)
 
         for g in ppObj.items:
-            group = vsdModels.APIGroup(**g)
+            group = vsdModels.Group(**g)
             groups.append(group)
 
         return groups, ppObj
 
+
     def getGroup(self, resource):
-        """ retrieve a group object (APIGroup)
+        """ retrieve a group object (Group)
 
         :param int,str resource: path to the group id (int) or selfUrl (str)
         :return: group  object
-        :rtype: APIGroup
+        :rtype: Group
         """
 
         if isinstance(resource, int):
@@ -1142,18 +1077,16 @@ class VSDConnecter(object):
         res = self.getRequest(resource)
 
         if res:
-            group = vsdModels.APIGroup()
-            group.set(obj=res)
-            return group
+            return vsdModels.Group(**res)
         else:
             return None
 
     def getUser(self, resource):
-        """ retrieve a user object (APIUser)
+        """ retrieve a user object (User)
 
         :param int,str resource: path to the user resource id (int) or selfUrl (str)
         :return: user object
-        :rtype: APIUser
+        :rtype: User
         """
         if isinstance(resource, int):
             resource = 'users/{0}'.format(resource)
@@ -1161,7 +1094,7 @@ class VSDConnecter(object):
         res = self.getRequest(resource)
 
         if res:
-            user = vsdModels.APIUser(**res)
+            user = vsdModels.User(**res)
             return user
         else:
             return None
@@ -1172,7 +1105,7 @@ class VSDConnecter(object):
 
         :param str permset: name of the permission set: available are private, protect, default, collaborate, full or a list of permission ids (list)
         :return perms: list of object rights objects
-        :rtype: APIObjectRight
+        :rtype: OjectRight
         """
 
         if permset == 'private':
@@ -1208,7 +1141,7 @@ class VSDConnecter(object):
             rights = list()
             for item in obj.objectGroupRights:
                 res = self.getRequest(item['selfUrl'])
-                right = vsdModels.APIObjectGroupRight()
+                right = vsdModels.ObjectGroupRight()
                 right.set(obj=res)
                 rights.append(right)
 
@@ -1228,15 +1161,15 @@ class VSDConnecter(object):
             rights = list()
             for item in obj.objectUserRights:
                 res = self.getRequest(item['selfUrl'])
-                right = vsdModels.APIObjectUserRight()
+                right = vsdModels.ObjectUserRight()
                 right.set(obj=res)
                 rights.append(right)
 
         return rights
 
-    #################################################
-    # api objects handling (MODIFY)
-    ################################################
+#################################################
+# api objects handling (MODIFY)
+################################################
     def postRequest(self, resource, data):
         """add data to an object
 
@@ -1260,11 +1193,13 @@ class VSDConnecter(object):
 
         obj = self.getObject(resource)
         if obj.linkedObjectRelations:
-            for link in self.iteratePageItems(obj.linkedObjectRelations, vsdModels.APIObjectLink):
+            for link in self.iteratePageItems(obj.linkedObjectRelations, vsdModels.ObjectLink):
                 print(link)
                 self.delRequest(link.selfUrl)
         else:
             print('nothing to delete, no links available')
+
+
 
     def delRequest(self, resource):
         """
@@ -1276,7 +1211,7 @@ class VSDConnecter(object):
         """
 
         try:
-            req = self.s.delete(self.fullUrl(resource))
+            req = self._delete(self.fullUrl(resource))
             if req.status_code == requests.codes.ok:
                 print('resource {0} deleted, 200'.format(self.fullUrl(resource)))
                 return req.status_code
@@ -1291,6 +1226,8 @@ class VSDConnecter(object):
             print('del request failed:', err)
             return
 
+
+
     def delObject(self, obj):
         """
         delete an unvalidated object
@@ -1301,13 +1238,14 @@ class VSDConnecter(object):
         """
 
         try:
-            req = self.s.delete(obj.selfUrl)
+            req = self._delete(obj.selfUrl)
             if req.status_code == requests.codes.ok:
                 print('object {0} deleted'.format(obj.id))
                 return req.status_code
             else:
-                return req.status_code
                 print('not deleted', req.status_code)
+                return req.status_code
+
 
         except requests.exceptions.RequestException as err:
             print('del request failed:', err)
@@ -1365,17 +1303,17 @@ class VSDConnecter(object):
         """
         creates the folder with a given name (name) inside a folder (parent) if not already exists
 
-        :param APIFolder parent: the root folder
+        :param Folder parent: the root folder
         :param str name: name of the folder which should be created
         :param bool check: it we should check if already exist, default = True
         :return: the folder object of the generated folder or the existing folder
-        :rtype: APIFolder
+        :rtype: Folder
         """
 
-        folder = vsdModels.APIFolder()
+        folder = vsdModels.Folder()
         if parent is None:
             parent = self.getFolderByName('MyProjects', mode='exact')
-        folder.parentFolder = vsdModels.APIBasic(selfUrl=parent.selfUrl)
+        folder.parentFolder = vsdModels.APIBase(selfUrl=parent.selfUrl)
         folder.name = name
 
         exists = False
@@ -1443,7 +1381,7 @@ class VSDConnecter(object):
         res = self.putRequest(obj.selfUrl, data=obj.to_struct())
 
         if res:
-            obj = self.createAPIObject(res)
+            obj = vsdModels.APIObject._create(res)
             return obj
         else:
             return res
@@ -1508,9 +1446,9 @@ class VSDConnecter(object):
             print('publish request failed:', err)
 
     def deleteFolderContent(self, folder):
-        """ delete all content from a folder (APIFolder)
+        """ delete all content from a folder (Folder)
 
-        :param APIFolder folder: a folder object
+        :param Folder folder: a folder object
         :return state: returns true if successful, else False
         :rtype: bool
         """
@@ -1521,7 +1459,7 @@ class VSDConnecter(object):
 
         res = self.putRequest('folders', data=folder.to_struct())
 
-    def postObjectRights(self, obj, group, perms, isuser=False):
+    def postObjectRightsOld(self, obj, group, perms, isuser=False):
         """
         translate a set of permissions and a group into the appropriate format and add it to the object
 
@@ -1543,7 +1481,7 @@ class VSDConnecter(object):
             rights.append(dict([('selfUrl', perm.selfUrl)]))
 
         if isuser:
-            objRight = vsdModels.APIObjectUserRight()
+            objRight = vsdModels.ObjectUserRight()
             objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
             objRight.relatedRights = rights
             objRight.relatedUser = dict([('selfUrl', group.selfUrl)])
@@ -1551,7 +1489,7 @@ class VSDConnecter(object):
             objRight.set(res)
 
         else:
-            objRight = vsdModels.APIObjectGroupRight()
+            objRight = vsdModels.ObjectGroupRight()
             objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
             objRight.relatedRights = rights
             objRight.relatedGroup = dict([('selfUrl', group.selfUrl)])
@@ -1562,11 +1500,11 @@ class VSDConnecter(object):
     def postObjectUserRights(self, obj, user, perms):
         """ translate a set of permissions and a user into the appropriate format and add it to the object
 
-        :param APIObject obj: the object you want to add the permissions to
-        :param APIUser user: user object
+        :param Object obj: the object you want to add the permissions to
+        :param User user: user object
         :param list perms: list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
         :return: user rights object
-        :rtype: APIObjectUserRight
+        :rtype: ObjectUserRight
         """
 
         # creat the dict of rights
@@ -1574,7 +1512,7 @@ class VSDConnecter(object):
         for perm in perms:
             rights.append(dict([('selfUrl', perm.selfUrl)]))
 
-        objRight = vsdModels.APIObjectUserRight()
+        objRight = vsdModels.ObjectUserRight()
         objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
         objRight.relatedRights = rights
         objRight.relatedUser = dict([('selfUrl', user.selfUrl)])
@@ -1587,11 +1525,11 @@ class VSDConnecter(object):
     def postObjectGroupRights(self, obj, group, perms):
         """ translate a set of permissions and a group into the appropriate format and add it to the object
 
-        :param APIObject obj: the object you want to add the permissions to
-        :param APIGroup group: group object
+        :param Object obj: the object you want to add the permissions to
+        :param Group group: group object
         :param list perms: list of Object Rights (APIObjectRight), use getPermissionSet to retrive the ObjectRights based on the permission sets
         :return: group rights object
-        :rtype: APIObjectGroupRight
+        :rtype: ObjectGroupRight
         """
 
         # creat the dict of rights
@@ -1600,7 +1538,7 @@ class VSDConnecter(object):
         for perm in perms:
             rights.append(dict([('selfUrl', perm.selfUrl)]))
 
-        objRight = vsdModels.APIObjectGroupRight()
+        objRight = vsdModels.ObjectGroupRight()
         objRight.relatedObject = dict([('selfUrl', obj.selfUrl)])
         objRight.relatedRights = rights
         objRight.relatedGroup = dict([('selfUrl', group.selfUrl)])
@@ -1610,49 +1548,67 @@ class VSDConnecter(object):
 
         return objRight
 
+    def postObjectRights(self, obj, target):
+        """
+        the permission defined in userRights or groupRights are pushed to the Database
+        
+        :param str target: either 'group' or 'user'
+        :param APIObject obj: a object containing the permission
+        """
+
+        if target == 'user':
+            for item in obj.userRights:
+                res = self.postRequest(
+                    'object-user-rights',
+                    data=item.to_struct()
+                )
+        else:
+            for item in obj.groupRights:
+                res = self.postRequest(
+                    'object-group-rights',
+                    data=item.to_struct()
+                )
+
     def addLink(self, obj1, obj2):
         """ add an object link
 
-        :param APIBasic obj1: a linked object with selfUrl
-        :param APIBasic obj2: a linked object with selfUrl
+        :param APIBase obj1: a linked object with selfUrl
+        :param APIBase obj2: a linked object with selfUrl
         :return: the created object-link
         :rtype: json
         """
 
-        link = vsdModels.APIObjectLink(object1 =obj1, object2 = obj2)
+        link = vsdModels.ObjectLink(object1=obj1, object2=obj2)
         link.validate()
         return self.postRequest('object-links', data=link.to_struct())
 
-    def addOntologyToObject(self, obj, ontology, pos=0):
-        """ add an ontoly term to an object
+    def addOntologyToObject(self, obj):
+        """ add ontology terms to an object
 
-        :param APIBasic obj: basic object
-        :param APIOntology ontology: ontology object
-        :param int pos: position of the ontology term, default = 1
-        :return: returns true if successfully added
-        :rtype: bool
+        :param APIObject obj: a API object
+        
         """
-
-        isset = False
-        if isinstance(pos, int):
-            onto = vsdModels.APIObjectOntology()
-            onto.position = pos
-            onto.object = dict([('selfUrl', obj.selfUrl)])
-            onto.ontologyItem = dict([('selfUrl', ontology.selfUrl)])
-            onto.type = ontology.type
-
-            res = self.postRequest('object-ontologies/{0}'.format(ontology.type), data=onto.to_struct())
-            if res:
-                isset = True
-        else:
-            print('position needs to be a number (int)')
-
-        return isset
+        i = -1
+        for item in obj.ontologyItems.items:
+            i = i + 1
+            ana = vsdModels.ObjectOntology(
+                type=vsdModels.OntologyItem(**item).type,
+                position=i,
+                ontologyItem=vsdModels.APIBase(selfUrl=vsdModels.OntologyItem(**item).selfUrl),
+                object=vsdModels.APIBase(selfUrl=obj.selfUrl)
+            )
+            print(ana.to_struct())
+            self.postRequest(
+                'object-ontologies/{0}'.format(
+                    vsdModels.OntologyItem(**item).type
+                ),
+                data=ana.to_struct())
+            
 
     def deleteFolder(self, folder, recursive=False):
-        """remove a folder (APIFolder)
+        """remove a folder (Folder)
 
-        :param APIFolder folder: the folder object
+        :param Folder folder: the folder object
         :return: True if deleted, False if not
         :rtype: bool
         """
@@ -1673,11 +1629,11 @@ class VSDConnecter(object):
         creates the folders based on the filepath if not already existing,
         starting from the rootfolder
 
-        :param APIFolder rootfolder: the root folder object
+        :param Folder rootfolder: the root folder object
         :param Path filepath: filepath of the file
         :param int parents: number of partent levels to create from file folder
         :return: the last folder in the tree
-        :rtype: APIFolder
+        :rtype: Folder
         """
 
         fp = filepath.resolve()
@@ -1704,9 +1660,9 @@ class VSDConnecter(object):
                             if fold.name == fname:
                                 fchild = fold
                 if not fchild:
-                    f = vsdModels.APIFolder()
+                    f = vsdModels.Folder()
                     f.name = fname
-                    f.parentFolder = vsdModels.APIFolder(selfUrl=fparent.selfUrl)
+                    f.parentFolder = vsdModels.Folder(selfUrl=fparent.selfUrl)
                     # f.toJson()
                     res = self.postRequest('folders', f.to_struct())
                     fparent.populate(**res)
@@ -1724,19 +1680,19 @@ class VSDConnecter(object):
         """
         add an object to the folder
 
-        :param APIFolder target: the target folder
-        :param APIObject obj: the object to copy
+        :param Folder target: the target folder
+        :param Object obj: the object to copy
         :return: updated folder
-        :rtype: APIFolder
+        :rtype: Folder
         """
 
-        objSelfUrl = vsdModels.APIBasic(**obj.to_struct())
+        objSelfUrl = vsdModels.APIBase(**obj.to_struct())
 
         if not objSelfUrl in target.containedObjects:
             target.containedObjects.append(objSelfUrl)
             res = self.putRequest('folders', data=target.to_struct())
 
-            target = vsdModels.APIFolder(**res)
+            target = vsdModels.Folder(**res)
             return target
 
         else:

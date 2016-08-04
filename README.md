@@ -10,18 +10,15 @@ This library implements a client for the REST API of the virtualskeletondatabase
 - usage of **requests** package instead of urllib2
 - usage of **pathlib** instead of os.path
 - usage of **PyJWT** for jwt.io authentication [PyJWT](https://github.com/jpadilla/pyjwt)
-- support file poster.py removed (no needed with requests)
 - introduction of API classes
 
 ## Recent updates
-- Added SAML auth 
-- Added chunk Upload (upload files > 500 MB) 
-- Added JWT auth
+moved to jsonmodels for apiclasses
 
 ### What is this repository for? ###
 
 * Quick summary: connect to vsd
-* Version: 0.2
+* Version: 0.8.1dev
 
 ### How do I get set up? ###
 1. clone the repo

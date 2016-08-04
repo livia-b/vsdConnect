@@ -38,7 +38,7 @@ if major_python_version < 3 or (major_python_version == 3 and minor_python_versi
 
 setup(
     name = "vsdConnect",
-    version = "0.8dev",
+    version = "0.8.1dev",
     package_dir = {'vsdConnect': 'vsdConnect'},
     packages = ['vsdConnect'],
     long_description = open('README.md').read(),
