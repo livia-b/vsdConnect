@@ -60,7 +60,10 @@ class ListValidator(object):
 class URLField(fields.StringField):
     pass #add url-specific fields?
 
+class longIntField(fields.IntField):
+    types = (int, long,)
 
+fields.longIntField = longIntField
 
 ##########################################
 # Attributes Data
@@ -161,6 +164,7 @@ class APIBase(models.Base):
     def get(self):
         """
         get the object as json readable structure (dict)
+        #it should be renamed, it interferes with overriding method (with apisession)
 
         :return: json 
         :rtype: json
@@ -178,6 +182,7 @@ class APIBase(models.Base):
 
         """
         # takes existing fields and sets its value from the input data
+
         for name, field in self.iterate_over_fields():
             field.__set__(self, data[name])
 
@@ -283,7 +288,7 @@ class File(APIBaseID):
     downloadUrl = URLField()
     originalFileName = fields.StringField()
     anonymizedFileHashCode = fields.StringField()
-    size = fields.IntField()
+    size = fields.longIntField()
     fileHashCode = fields.StringField()
     objects = fields.EmbeddedField(Pagination) #ObjectPagination
 
@@ -312,7 +317,7 @@ class Folder(APIBaseID):
         res = apisession._get(self.selfUrl)
         return Folder(**res)
 
-    def get_partent(self, apisession):
+    def get_parent(self, apisession):
         """
         return the parent Folder
 
@@ -321,7 +326,7 @@ class Folder(APIBaseID):
         :rtype: Folder
         """
 
-        return apisession.getFolder(parentFolder.selfUrl)
+        return apisession.getFolder(self.parentFolder.selfUrl)
 
     def get_objects(self, apisession):
         """
@@ -697,7 +702,7 @@ class APIObject(APIBaseID):
     type = fields.EmbeddedField(ObjectType)
     downloadUrl = URLField()
     license = fields.EmbeddedField(APIBase)
-    files = fields.EmbeddedField(APIBasePagination)
+    files = fields.EmbeddedField(Pagination)
     linkedObjects = fields.EmbeddedField(Pagination)
     linkedObjectRelations = fields.EmbeddedField(Pagination)
     ontologyItems = fields.EmbeddedField(Pagination)
@@ -712,16 +717,24 @@ class APIObject(APIBaseID):
     groupRights = fields.ListField(ObjectGroupRight)
 
 
+    @classmethod
     def _create(self, response=None, **kwargs):
+        """
+        Constructor that performs downcasting according to the type.
+        The input can either be a dictionary or a sequence of field
+        :param response: dictionary (typically json response)
+        :param kwargs: named arguments (used if response is none). Typically used in iterateAllPaginated
+        :return: instance of object
+        """
         
         if response is None:
             response = kwargs
         objType = self._get_object_type(response)
     
-        return objType
+        return objType(**response)
 
-
-    def _get_object_type(self, response):
+    @classmethod
+    def _get_object_type(cls, response):
         """
         create an APIObject depending on the type
 
@@ -734,8 +747,9 @@ class APIObject(APIBaseID):
         otype = obj.type.name + 'Object'
         if not globals()[otype]:
             print("Unknown type %s" % otype)
+            return cls
 
-        return globals()[otype](**response) #eval() works, but security issues
+        return globals()[otype] #eval() works, but security issues
         
 
     def get(self, apisession):
@@ -935,7 +949,7 @@ class ClinicalStudyDataObject(APIObject):
     subject = fields.EmbeddedField(SubjectData)
     clinicalStudyDefinition = fields.EmbeddedField(APIBase)
 
-class ClincalStudyDefinitionData(models.Base):
+class ClinicalStudyDefinitionData(models.Base):
     """
     attributes for clinical study definition
     """
@@ -950,7 +964,7 @@ class ClinicalStudyDefinitionObject(APIObject):
     """
     API class for clinical trail definition view model
     """
-    clincalStudyDefinition = fields.EmbeddedField(ClincalStudyDefinitionData)
+    clinicalStudyDefinition = fields.EmbeddedField(ClinicalStudyDefinitionData)
 
 
 class GenomicPlatformObject(APIObject):
