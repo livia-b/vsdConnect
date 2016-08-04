@@ -125,6 +125,9 @@ class APIPagination(models.Base):
         firstItem = self.items[0]
         return firstItem.selfUrl
 
+class APIBasePagination(APIPagination):
+    items = fields.ListField(APIBasic)
+
 
 class APIFileUploadResponse(APIBasic):
     relatedObject = fields.EmbeddedField(APIBasic)
@@ -194,7 +197,7 @@ class APIObject(APIBaseId):
     ontologyCount = fields.IntField()
     license = fields.EmbeddedField(APILicense)
     files = fields.EmbeddedField(APIPagination)
-    linkedObjects = fields.EmbeddedField('ObjectPagination')
+    linkedObjects = fields.EmbeddedField(APIPagination)
     linkedObjectRelations = fields.EmbeddedField(APIPagination)
     downloadUrl = fieldURL()
 
