@@ -321,7 +321,7 @@ class Folder(APIBaseID):
         :rtype: Folder
         """
 
-        return apisession.getFolder(parentFolder.selfUrl)
+        return Folder(selfUrl=self.parentFolder.selfUrl).get(apisession)
 
     def get_objects(self, apisession):
         """
@@ -343,26 +343,34 @@ class Folder(APIBaseID):
             print('the folder does not have any contained objects')
             return None
 
-    def get_child_folders(self, apisession):
+    def get_child_folders(self, apisession, recursive=False):
         """
         return the Folders contained in the folder (convert APIBase Folder)
 
         :param connectVSD apisession: the API session
+        :param bool recursive: if the child folder should be recursively returned
         :return: list of Folder
         :rtype: list
         """
-        itemlist = list()
+        folderObject = self.get(apisession)
+        dirs = folderObject.childFolders
+        #nondirs = folderObject.containedObjects
+        if dirs is None:
+            dirs = []
+        #if nondirs is None:
+        #    nondirs = []
+        if recursive:
+            yield folderObject, dirs#, nondirs
 
-        if self.childFolders:
-
-            for item in self.childFolders:
-            
-                itemlist.append(Folder(selfUrl=item.selfUrl).get(apisession))
+            for nextDir in dirs:
+                nextDir = Folder(selfUrl=nextDir.selfUrl).get(apisession)
+                for x in nextDir.get_child_folders(apisession=apisession, recursive=True):
+                    yield x
+        if not recursive:
+            for nextDir in dirs:
+                x = Folder(selfUrl=nextDir.selfUrl).get(apisession)
+                yield x
                 
-            return itemlist
-        else:
-            print('the folder does not have any child folder')
-            return None
 
     def get_content(self, apisession, recursive=False, mode='b'):
         """
@@ -390,8 +398,10 @@ class Folder(APIBaseID):
         else:
             print('mode {0} not supported'.format(mode))
 
-        folders = self.get_child_folders(apisession)
-
+        foldergen = self.get_child_folders(apisession)
+        folders = list()
+        for item in foldergen:
+            folders.append(item)
 
         temp = dict([('folder', self), ('object', None)])
 
@@ -422,12 +432,161 @@ class Folder(APIBaseID):
 
         return content
 
+    def delete(self, apisession, _root=None):
+        """
+        get the objects and folder contained in the given folder. 
+
+        :param connectVSD apisession: the API session
+        :param Folder root: the folder to delete, has to be None by default, only set internally
+        :return: status of deletion 
+        :rtype: bool
+        """
+        state = False
+        
+        ## set folder to delete 
+        if not _root:
+            _root = self
+                   
+        # Delete objects
+        if self.containedObjects:
+            self = self.delete_objects(apisession)
+
+        # Delete folder if empty
+        if not self.childFolders and not self.containedObjects:
+                        
+            res = apisession.delRequest(self.selfUrl)
+
+            if res == 204 or res == 200:    
+                state = True
+            else:
+                state = False
+                
+            # return state if root folder is deleted/failed   
+            if self.selfUrl == _root.selfUrl:       
+                return state
+            # run delete on parent folder
+            else:
+                parent = self.get_partent(apisession)
+                return parent.delete(apisession, _root=_root)
+
+        else:
+            folders = self.get_child_folders(apisession)
+            for f in folders:
+                return f.delete(apisession, _root=_root)
+
+
+    def delete_objects(self, apisession):
+        """
+        delete the containted objects of a folder
+
+        :param connectVSD apisession: the API session
+        :return: updated folder 
+        :rtype: Folder
+        """
+        
+        if self.containedObjects:
+            self.containedObjects = list()
+            res = apisession.putRequest('folders', data=self.to_struct())
+            self = Folder(**res)
+        return self
+
+    def delete_content(self, apisession):
+
+        self.delete_objects(apisession)
+
+        if self.childFolders:
+            foldergen = self.get_child_folders(apisession)
+            folders = list()
+            for item in foldergen:
+                item.delete(apisession)
+        
+            self = self.get(apisession)
+
+        if not self.childFolders and not self.containedObjects:
+            return True
+        else:
+            return False
+
+    def create(self, apisession):
+        """
+        creates the folder if not already exists
+
+        :param connectVSD apisession: the API session
+        :return: the folder
+        :rtype: Folder
+        """
+        # check exists
+        parent = self.get_partent(apisession)
+        
+        create = True
+
+        if parent.childFolders:
+            children = parent.get_child_folders(apisession)
+            
+            child_d = dict()
+            for child in children:
+                child_d[child.name]=child
+
+            if self.name in child_d:
+                print("folder exists, not created")
+                create = False
+                return child_d[self.name]
+  
+        if create:
+            res = apisession.postRequest('folders', self.to_struct())
+            print("folder created:" + self.name)
+            return Folder(**res)
+
+    def create_folders(self, apisession, filepath, parents):
+    #def createFolderStructure(self, rootfolder, filepath, parents):
+        """
+        creates the folders based on the filepath if not already existing,
+        starting from the rootfolder
+
+        :param connectVSD apisession: the API session
+        :param Path filepath: filepath of the file
+        :param int parents: number of partent levels to create from folder in which the file is located
+        :return: the last folder in the tree
+        :rtype: Folder
+        """
+
+        fp = filepath.resolve()
+        folders = list(fp.parts)
+        folders.reverse()
+
+        ##remove file from list
+        if fp.is_file():
+            folders.remove(folders[0])
+    
+        if parents > 0 and parents <= len(folders):
+            for i in range(parents, len(folders)):
+               folders.remove(folders[-1])
+            folders.reverse()
+
+            fparent = self
+        
+            if fparent:
+                # iterate over file path and create the directory
+                for fname in folders:     
+                    f = Folder(
+                            name=fname,
+                            parentFolder=APIBase(selfUrl=fparent.selfUrl)
+                        )
+                    fparent = f.create(apisession)
+                return fparent
+            else:
+                print('Root folder does not exist', rootfolder)
+                return None
+        else:
+            print("file has no parent folder")
+            return None
 
 
 class FolderPagination(Pagination):
     """
     API class for Pagination results containing folders
     """
+
     items = fields.ListField(Folder)
 
 
