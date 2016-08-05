@@ -1482,7 +1482,7 @@ class VSDConnecter(object):
 
         state = False
 
-        folder.containedObjects = None
+        folder.populate(containedObjects=None)
 
         res = self.putRequest('folders', data=folder.to_struct())
 
@@ -1643,13 +1643,16 @@ class VSDConnecter(object):
         state = False
         self.deleteFolderContent(folder)
         res = self.delRequest(folder.selfUrl)
+
         if res == 200 or res == 204:
             state = True
-        if recursive:
-            folders = self.getContainedFolders(folder)
-            for f in folders:
-                return self.deleteFolder(f, recursive=recursive)
+        else:
+            if recursive:
+                folders = self.getContainedFolders(folder)
+                for f in folders:
+                    return self.deleteFolder(f, recursive=recursive)
         return state
+
 
     def createFolderStructure(self, rootfolder, filepath, parents):
         """
@@ -1672,35 +1675,22 @@ class VSDConnecter(object):
             folders.remove(folders[0])
 
         for i in range(parents, len(folders)):
-            folders.remove(folders[i])
-
+           folders.remove(folders[-1])
         folders.reverse()
+
         fparent = rootfolder
-
+        
         if fparent:
-            for fname in folders:
-                fchild = None
-                if fparent:
-                    if fparent.childFolders:
-                        for child in fparent.childFolders:
-                            fold = self.getFolder(child.selfUrl)
-                            if fold.name == fname:
-                                fchild = fold
-                if not fchild:
-                    f = vsdModels.Folder()
-                    f.name = fname
-                    f.parentFolder = vsdModels.Folder(selfUrl=fparent.selfUrl)
-                    # f.toJson()
-                    res = self.postRequest('folders', f.to_struct())
-                    fparent.populate(**res)
-
-                else:
-                    fparent = fchild
-
+            # iterate over file path and create the directory
+            for fname in folders:     
+                f = vsdModels.Folder(
+                    name=fname,
+                    parentFolder=vsdModels.Folder(selfUrl=fparent.selfUrl)
+                    )
+                fparent = f.create(self)
             return fparent
         else:
             print('Root folder does not exist', rootfolder)
-            # jData = jFolder(folder)
             return None
 
     def addObjectToFolder(self, target, obj):
