@@ -54,7 +54,7 @@ try:
 except:
     import xml.etree.ElementTree as ET
 
-import models as vsdModels
+import vsdConnect.models as vsdModels
 import logging
 
 logger = logging.getLogger(__name__)

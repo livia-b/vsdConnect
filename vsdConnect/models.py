@@ -60,10 +60,10 @@ class ListValidator(object):
 class URLField(fields.StringField):
     pass #add url-specific fields?
 
-class longIntField(fields.IntField):
-    types = (int, long,)
-
-fields.longIntField = longIntField
+#see http://python3porting.com/differences.html#long
+import sys
+if sys.version_info < (3,):
+    fields.IntField.types = (int, long,)
 
 ##########################################
 # Attributes Data
@@ -288,7 +288,7 @@ class File(APIBaseID):
     downloadUrl = URLField()
     originalFileName = fields.StringField()
     anonymizedFileHashCode = fields.StringField()
-    size = fields.longIntField()
+    size = fields.IntField()  #in Python 2 it needs the patch for long type
     fileHashCode = fields.StringField()
     objects = fields.EmbeddedField(Pagination) #ObjectPagination
 
